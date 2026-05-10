@@ -23,13 +23,14 @@ jobs:
       - name: Set up Python 3.11
         run: uv python install 3.11
 
+      - name: Create virtual environment
+        run: uv venv
+
       - name: Install dependencies
-        run: |
-          uv pip install -r requirements.txt --system
-          uv pip install pytest pytest-cov ruff --system
+        run: uv pip install -r requirements.txt
 
       - name: Lint with ruff
-        run: ruff check app/
+        run: uv run ruff check app/
 
       - name: Run tests
-        run: pytest tests/ -v --cov=app --cov-report=term-missing
+        run: uv run pytest tests/ -v --cov=app --cov-report=term-missing
