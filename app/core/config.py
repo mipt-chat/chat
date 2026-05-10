@@ -4,9 +4,9 @@
 """
 
 from pathlib import Path
-from typing import Optional, Literal
+from typing import Literal
 
-from pydantic import DirectoryPath, Field, SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -54,16 +54,16 @@ class Settings(BaseSettings):
     active_llm_provider: Literal["yandex", "giga", "openai_compatible"] = "yandex"
 
     # YandexGPT
-    yandex_api_key: Optional[SecretStr] = None
-    yandex_folder_id: Optional[str] = None
+    yandex_api_key: SecretStr | None = None
+    yandex_folder_id: str | None = None
     yandex_base_url: str = "https://llm.api.cloud.yandex.net/foundationModels/v1/completions"
 
     # GigaChat
-    gigachat_api_key: Optional[SecretStr] = None
+    gigachat_api_key: SecretStr | None = None
     gigachat_base_url: str = "https://gigachat.devices.sberbank.ru/api/v1"
 
     # Универсальный OpenAI-совместимый
-    openai_compatible_api_key: Optional[SecretStr] = None
+    openai_compatible_api_key: SecretStr | None = None
     openai_compatible_base_url: str = "http://localhost:11434/v1"
     openai_compatible_model_name: str = "llama3"
 
@@ -83,7 +83,11 @@ class Settings(BaseSettings):
                 "base_url": self.gigachat_base_url,
             },
             "openai_compatible": {
-                "api_key": self.openai_compatible_api_key.get_secret_value() if self.openai_compatible_api_key else None,
+                "api_key": (
+                    self.openai_compatible_api_key.get_secret_value()
+                if self.openai_compatible_api_key
+                else None
+                ),
                 "base_url": self.openai_compatible_base_url,
                 "model_name": self.openai_compatible_model_name,
             },

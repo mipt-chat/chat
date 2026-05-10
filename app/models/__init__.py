@@ -3,10 +3,10 @@
 """
 
 from app.models.chat import ChatRequest, ChatResponse, Source
-from app.models.knowledge import RetrievedChunk, KnowledgeDocument
-from app.models.session import Session, DialogMessage
-from app.models.metrics import UnansweredQuery
 from app.models.error import ErrorResponse
+from app.models.knowledge import KnowledgeDocument, RetrievedChunk
+from app.models.metrics import UnansweredQuery
+from app.models.session import DialogMessage, Session
 
 __all__ = [
     "ChatRequest",

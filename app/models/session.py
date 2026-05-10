@@ -2,10 +2,10 @@
 Модели для хранения истории диалогов.
 """
 
-from datetime import datetime
-from typing import List
-from pydantic import BaseModel, Field
 import uuid
+from datetime import datetime
+
+from pydantic import BaseModel, Field
 
 
 class DialogMessage(BaseModel):
@@ -38,7 +38,7 @@ class Session(BaseModel):
         description="Уникальный идентификатор сессии",
         examples=["tg_user_12345"],
     )
-    messages: List[DialogMessage] = Field(
+    messages: list[DialogMessage] = Field(
         default_factory=list,
         description="История сообщений в сессии",
     )

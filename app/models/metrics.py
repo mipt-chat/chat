@@ -3,7 +3,7 @@
 """
 
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -13,7 +13,7 @@ class UnansweredQuery(BaseModel):
     Сохраняется для последующей интеграции с CRM.
     """
     question: str = Field(..., description="Исходный вопрос пользователя")
-    session_id: Optional[str] = Field(
+    session_id: str | None = Field(
         default=None,
         description="Идентификатор сессии пользователя",
     )

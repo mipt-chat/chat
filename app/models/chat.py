@@ -2,7 +2,7 @@
 Модели для API чата.
 """
 
-from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -24,7 +24,8 @@ class Source(BaseModel):
 class ChatRequest(BaseModel):
     """
     Запрос от пользователя через API.
-    session_id может представлять из себя как id пользователя в telegram, так и сессию анонимного пользователя в вебе
+    session_id может представлять из себя как id пользователя в telegram,
+    так и сессию анонимного пользователя в вебе
     """
     message: str = Field(
         ...,
@@ -33,12 +34,12 @@ class ChatRequest(BaseModel):
         description="Текст сообщения пользователя",
         examples=["Как оформить возврат товара?"],
     )
-    session_id: Optional[str] = Field(
+    session_id: str | None = Field(
         default=None,
         description="Идентификатор сессии для сохранения контекста диалога",
         examples=["tg_user_12345"],
     )
-    image: Optional[str] = Field(
+    image: str | None = Field(
         default=None,
         description="Скриншот в формате base64 (бонусная фича, необязательно)",
     )
@@ -57,7 +58,10 @@ class ChatResponse(BaseModel):
         default=True,
         description="Флаг: удалось ли найти релевантный ответ в базе знаний",
     )
-    session_id: Optional[str] = Field(
+    session_id: str | None = Field(
         default=None,
-        description="Подтверждение сессии.Если пришел апрос без ID — возвращаем новый.Это handshake для новой сессии",
+        description=(
+            "Подтверждение идентификатора сессии. Если запрос без ID — "
+            "возвращаем новый. Это handshake для новой сессии"
+        ),
     )

@@ -8,7 +8,6 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from app.core.logging_config import get_logger
 from app.models.metrics import UnansweredQuery
@@ -36,7 +35,7 @@ class MetricsCollector:
     def record_unanswered(
         self,
         question: str,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         reason: str = "low_relevance",
     ) -> None:
         """
@@ -76,7 +75,7 @@ class MetricsCollector:
         if not self._unanswered_file.exists():
             return 0
         try:
-            with open(self._unanswered_file, "r", encoding="utf-8") as f:
+            with open(self._unanswered_file, encoding="utf-8") as f:
                 return sum(1 for _ in f)
         except OSError as e:
             logger.error(f"Failed to read unanswered queries: {e}")
@@ -97,7 +96,7 @@ class MetricsCollector:
 
         queries = []
         try:
-            with open(self._unanswered_file, "r", encoding="utf-8") as f:
+            with open(self._unanswered_file, encoding="utf-8") as f:
                 # Читаем последние N строк
                 lines = f.readlines()
                 for line in lines[-limit:]:

@@ -2,7 +2,8 @@
 Модели для работы с базой знаний и retrieval.
 """
 
-from typing import Any, Dict
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -13,7 +14,7 @@ class RetrievedChunk(BaseModel):
     """
     chunk_id: str = Field(..., description="Уникальный ID чанка в ChromaDB")
     text: str = Field(..., description="Текстовое содержимое чанка")
-    metadata: Dict[str, Any] = Field(
+    metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Метаданные чанка. Ключ 'source_path' обязателен для базы знаний",
     )
@@ -36,7 +37,7 @@ class KnowledgeDocument(BaseModel):
         examples=["instructions/returns/policy.txt"],
     )
     content: str = Field(..., description="Полное содержимое документа")
-    metadata: Dict[str, Any] = Field(
+    metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Дополнительные метаданные документа",
     )

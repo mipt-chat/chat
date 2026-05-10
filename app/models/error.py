@@ -2,7 +2,7 @@
 Модели ошибок API.
 """
 
-from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -15,7 +15,7 @@ class ErrorResponse(BaseModel):
         description="Краткое описание ошибки",
         examples=["Knowledge base not found", "LLM provider timeout"],
     )
-    detail: Optional[str] = Field(
+    detail: str | None = Field(
         default=None,
         description="Подробное описание ошибки для разработчика",
     )

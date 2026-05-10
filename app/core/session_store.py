@@ -10,11 +10,10 @@ import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Optional
 
 from app.core.config import settings
 from app.core.logging_config import get_logger
-from app.models.session import Session, DialogMessage
+from app.models.session import DialogMessage, Session
 
 logger = get_logger(__name__)
 
@@ -56,7 +55,7 @@ class JsonSessionStore(BaseSessionStore):
     Каждая сессия — отдельный файл в data/sessions/.
     """
 
-    def __init__(self, sessions_dir: Optional[Path] = None) -> None:
+    def __init__(self, sessions_dir: Path | None = None) -> None:
         self._sessions_dir = sessions_dir or Path("data/sessions")
         self._sessions_dir.mkdir(parents=True, exist_ok=True)
 
@@ -73,7 +72,7 @@ class JsonSessionStore(BaseSessionStore):
             return Session(session_id=session_id, messages=[], updated_at=datetime.now())
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 data = json.load(f)
             session = Session.model_validate(data)
             logger.debug(f"Loaded session {session_id} with {len(session.messages)} messages")
@@ -162,7 +161,7 @@ def add_message(session_id: str, role: str, content: str) -> Session:
     return session
 
 
-def get_recent_messages(session_id: str) -> List[DialogMessage]:
+def get_recent_messages(session_id: str) -> list[DialogMessage]:
     """Возвращает последние сообщения сессии для контекста LLM."""
     session = load_session(session_id)
     return session.messages[-settings.max_history_length * 2:]

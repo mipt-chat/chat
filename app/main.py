@@ -4,8 +4,9 @@
 """
 
 import uvicorn
-from app.core.logging_config import setup_logging, get_logger
+
 from app.core.config import settings
+from app.core.logging_config import get_logger, setup_logging
 
 # Инициализация логирования до всего остального
 setup_logging()
