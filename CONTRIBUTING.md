@@ -38,12 +38,12 @@
 
 ## Ответственные за компоненты
 
-| Компонент | Разработчик    | Пакет |
-|-----------|----------------|-------|
-| Shared Infrastructure | Ольга Шипетина | `app/core/`, `app/models/`, `app/metrics/` |
-| API Layer | Dev 1          | `app/api/` |
-| Retrieval (RAG) | Dev 2          | `app/rag/` |
-| LLM Integration | Dev 3          | `app/llm/` |
-| Data Processing | Dev 4          | `app/data/` |
-| Telegram Bot | Dev 5          | `app/bot/` |
-| Tests & QA | ???            | `tests/` |
+| Компонент                |          Разработчик          | Пакет                                      |
+|:-------------------------|:-----------------------------:|:-------------------------------------------|
+| Shared Infrastructure    |    Ольга Шипетина (Dev 6)     | `app/core/`, `app/models/`, `app/metrics/` |
+| API Layer                |      Николай Dev (Dev 1)      | `app/api/`                                 |
+| Retrieval (RAG)          |    Марина Чурсина (Dev 2)     | `app/rag/`                                 |
+| LLM Integration          | Александра Харитонова (Dev 3) | `app/llm/`                                 |
+| Data Processing          |    Дмитрий Кушнир (Dev 4)     | `app/data/`                                |
+| Telegram Bot             |         Диана (Dev 5)         | `app/bot/`                                 |
+| Tests & QA               |     *ожидает назначения*      | `tests/`                                   |

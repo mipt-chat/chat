@@ -57,10 +57,12 @@ class Settings(BaseSettings):
     yandex_api_key: SecretStr | None = None
     yandex_folder_id: str | None = None
     yandex_base_url: str = "https://llm.api.cloud.yandex.net/foundationModels/v1/completions"
+    yandex_model_name: str = "yandexgpt"
 
     # GigaChat
     gigachat_api_key: SecretStr | None = None
     gigachat_base_url: str = "https://gigachat.devices.sberbank.ru/api/v1"
+    gigachat_model_name: str = "gigachat"
 
     # Универсальный OpenAI-совместимый
     openai_compatible_api_key: SecretStr | None = None
@@ -74,19 +76,29 @@ class Settings(BaseSettings):
         """
         provider_configs = {
             "yandex": {
-                "api_key": self.yandex_api_key.get_secret_value() if self.yandex_api_key else None,
+                "api_key": (
+                    self.yandex_api_key.get_secret_value()
+                    if self.yandex_api_key
+                    else None
+                ),
                 "base_url": self.yandex_base_url,
                 "folder_id": self.yandex_folder_id,
+                "model_name": "yandexgpt",
             },
             "giga": {
-                "api_key": self.gigachat_api_key.get_secret_value() if self.gigachat_api_key else None,
+                "api_key": (
+                    self.gigachat_api_key.get_secret_value()
+                    if self.gigachat_api_key
+                    else None
+                ),
                 "base_url": self.gigachat_base_url,
+                "model_name": "gigachat",
             },
             "openai_compatible": {
                 "api_key": (
                     self.openai_compatible_api_key.get_secret_value()
-                if self.openai_compatible_api_key
-                else None
+                    if self.openai_compatible_api_key
+                    else None
                 ),
                 "base_url": self.openai_compatible_base_url,
                 "model_name": self.openai_compatible_model_name,
@@ -115,7 +127,6 @@ class Settings(BaseSettings):
     log_level_file: str = "INFO"
     log_dir: Path = Path("logs")
     log_file: str = "bot.log"
-
 
 # Глобальный синглтон конфигурации — единственный экземпляр на всё приложение
 settings = Settings()
