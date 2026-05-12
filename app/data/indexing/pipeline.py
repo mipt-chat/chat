@@ -11,9 +11,10 @@ from typing import TYPE_CHECKING, Any
 
 from app.core import get_logger
 from app.core.config import settings
-from app.models import KnowledgeDocument
+from app.models import IndexedChunk, KnowledgeDocument
 
-from .chunking import Chunk, split_text_into_chunks
+from .chroma_store import add_indexed_chunks
+from .chunking import split_text_into_chunks
 
 if TYPE_CHECKING:
     import chromadb
@@ -34,9 +35,18 @@ def load_knowledge_document(file_path: Path) -> KnowledgeDocument:
     Загружает единый текстовый документ базы знаний.
     """
     if not file_path.exists():
+        logger.error("Knowledge document not found: %s", file_path)
         raise FileNotFoundError(f"Файл базы знаний не найден: {file_path}")
 
-    content = file_path.read_text(encoding="utf-8").strip()
+    try:
+        raw = file_path.read_text(encoding="utf-8")
+    except OSError as e:
+        logger.error("Failed to read knowledge file %s: %s", file_path, e)
+        raise
+    except UnicodeDecodeError as e:
+        logger.error("Invalid UTF-8 in knowledge file %s: %s", file_path, e)
+        raise
+    content = raw.strip()
     if not content:
         raise ValueError(f"Файл базы знаний пустой: {file_path}")
 
@@ -52,10 +62,23 @@ def _normalize_path(raw_path: str) -> str:
 
 
 def _load_yaml_config(file_path: Path) -> dict[str, Any]:
-    from yaml import safe_load
+    from yaml import YAMLError, safe_load
 
-    data = safe_load(file_path.read_text(encoding="utf-8")) or {}
+    try:
+        raw = file_path.read_text(encoding="utf-8")
+    except OSError as e:
+        logger.error("Failed to read YAML %s: %s", file_path, e)
+        raise
+    except UnicodeDecodeError as e:
+        logger.error("Invalid UTF-8 in YAML %s: %s", file_path, e)
+        raise
+    try:
+        data = safe_load(raw) or {}
+    except YAMLError as e:
+        logger.error("Invalid or corrupted YAML in %s: %s", file_path, e)
+        raise
     if not isinstance(data, dict):
+        logger.error("YAML root must be a mapping (object), got %s: %s", type(data).__name__, file_path)
         raise ValueError(f"YAML должен содержать объект верхнего уровня: {file_path}")
     return data
 
@@ -63,7 +86,7 @@ def _load_yaml_config(file_path: Path) -> dict[str, Any]:
 def _resolve_import_path(current_yaml: Path, import_ref: str) -> Path:
     normalized = _normalize_path(import_ref)
 
-    # Для ссылок вида "book/book.yaml" при текущем файле root/root.yaml
+    # Для ссылок вида "book/book.yaml" при entrypoint в каталоге root/ (root.yaml)
     # поднимаемся на уровень выше, чтобы путь резолвился от папки базы.
     if current_yaml.parent.name == "root" and "/" in normalized:
         return (current_yaml.parent.parent / normalized).resolve()
@@ -111,6 +134,7 @@ def _collect_documents_from_yaml(
     visited.add(resolved_yaml)
 
     if not resolved_yaml.exists():
+        logger.error("YAML config not found: %s", resolved_yaml)
         raise FileNotFoundError(f"YAML конфиг базы знаний не найден: {resolved_yaml}")
 
     config = _load_yaml_config(resolved_yaml)
@@ -120,10 +144,20 @@ def _collect_documents_from_yaml(
     if imports is None:
         imports = []
     if not isinstance(imports, list):
+        logger.error(
+            "Invalid 'imports' in %s: expected a list, got %s",
+            resolved_yaml,
+            type(imports).__name__,
+        )
         raise ValueError(f"Поле 'imports' должно быть списком: {resolved_yaml}")
 
     for item in imports:
         if not isinstance(item, str):
+            logger.error(
+                "Invalid imports entry in %s: expected string, got %s",
+                resolved_yaml,
+                type(item).__name__,
+            )
             raise ValueError(f"Элемент imports должен быть строкой: {resolved_yaml}")
         imported_yaml = _resolve_import_path(resolved_yaml, item)
         documents.extend(_collect_documents_from_yaml(imported_yaml, visited))
@@ -132,22 +166,45 @@ def _collect_documents_from_yaml(
     if docs is None:
         docs = {}
     if not isinstance(docs, dict):
+        logger.error(
+            "Invalid 'docs' in %s: expected a mapping, got %s",
+            resolved_yaml,
+            type(docs).__name__,
+        )
         raise ValueError(f"Поле 'docs' должно быть объектом: {resolved_yaml}")
+
+    logger.debug(
+        "KB manifest %s: %s import(s), %s doc entries",
+        resolved_yaml,
+        len(imports),
+        len(docs),
+    )
 
     for doc_id, raw_meta in docs.items():
         if not isinstance(doc_id, str) or not isinstance(raw_meta, dict):
+            logger.error("Invalid docs entry in %s: doc_id/meta types invalid", resolved_yaml)
             raise ValueError(f"Некорректная запись docs в: {resolved_yaml}")
         source = raw_meta.get("source")
         if not isinstance(source, str) or not source.strip():
+            logger.error("Invalid or missing 'source' for doc %r in %s", doc_id, resolved_yaml)
             raise ValueError(f"Для '{doc_id}' не задан корректный source в {resolved_yaml}")
 
         location_raw = raw_meta.get("location")
         location = location_raw if isinstance(location_raw, str) else None
         doc_path = _build_doc_path(resolved_yaml, location, source)
         if not doc_path.exists():
+            logger.error("Document '%s' not found at path: %s", doc_id, doc_path)
             raise FileNotFoundError(f"Документ '{doc_id}' не найден: {doc_path}")
 
-        content = doc_path.read_text(encoding="utf-8").strip()
+        try:
+            raw_content = doc_path.read_text(encoding="utf-8")
+        except OSError as e:
+            logger.error("Failed to read document '%s' (%s): %s", doc_id, doc_path, e)
+            raise
+        except UnicodeDecodeError as e:
+            logger.error("Invalid UTF-8 in document '%s' (%s): %s", doc_id, doc_path, e)
+            raise
+        content = raw_content.strip()
         if not content:
             logger.warning("Skipping empty document '%s': %s", doc_id, doc_path)
             continue
@@ -173,8 +230,13 @@ def _collect_documents_from_yaml(
 def load_knowledge_documents(entry_path: Path) -> list[KnowledgeDocument]:
     """
     Загружает документы базы знаний из txt или yaml-entry.
+
+    Для YAML: обход в глубину — ``imports`` (относительно каталога текущего yaml),
+    затем словарь ``docs`` (поля ``source``, опционально ``location`` → открытие .txt).
+    Повторный заход в один и тот же yaml по циклу импортов игнорируется (``visited``).
     """
     if not entry_path.exists():
+        logger.error("Knowledge base entry path not found: %s", entry_path)
         raise FileNotFoundError(f"Точка входа базы знаний не найдена: {entry_path}")
 
     suffix = entry_path.suffix.lower()
@@ -184,22 +246,31 @@ def load_knowledge_documents(entry_path: Path) -> list[KnowledgeDocument]:
         documents = [load_knowledge_document(entry_path)]
 
     if not documents:
+        logger.error("No indexable documents under knowledge base entry: %s", entry_path)
         raise ValueError("Не найдено документов для индексации")
 
     return documents
 
 
-def embed_chunks(model: SentenceTransformer, chunks: list[Chunk]) -> list[list[float]]:
+def embed_chunks(model: SentenceTransformer, chunks: list[IndexedChunk]) -> list[list[float]]:
     """
     Строит эмбеддинги чанков с e5-подготовкой текста.
     """
     prepared_texts = [add_e5_passage_prefix(chunk.text) for chunk in chunks]
-    embeddings = model.encode(
-        prepared_texts,
-        normalize_embeddings=True,
-        show_progress_bar=False,
-        convert_to_numpy=True,
-    )
+    try:
+        embeddings = model.encode(
+            prepared_texts,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+            convert_to_numpy=True,
+        )
+    except Exception as e:
+        logger.error(
+            "model.encode failed (%s chunks); check GPU/memory and input length: %s",
+            len(chunks),
+            e,
+        )
+        raise
     return embeddings.tolist()
 
 
@@ -208,6 +279,50 @@ def compute_document_hash(content: str) -> str:
     Вычисляет стабильный hash содержимого документа.
     """
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def _chroma_metadata_for_index(
+    doc: KnowledgeDocument,
+    chunk_index: int,
+) -> dict[str, str | int | float | bool]:
+    """
+    Собирает metadata для Chroma без значений None (Chroma их не принимает).
+    """
+    meta: dict[str, str | int | float | bool] = {
+        "source_path": doc.source_path,
+        "chunk_index": chunk_index,
+        "doc_hash": compute_document_hash(doc.content),
+    }
+    for key in ("doc_id", "doc_type", "location", "yaml_path"):
+        val = doc.metadata.get(key)
+        if val is not None:
+            meta[key] = val if isinstance(val, (str, int, float, bool)) else str(val)
+    return meta
+
+
+def build_indexed_chunks_for_document(
+    doc: KnowledgeDocument,
+    *,
+    chunk_size: int,
+    chunk_overlap: int,
+) -> list[IndexedChunk]:
+    """
+    Нарезает документ и собирает общие модели IndexedChunk для Chroma / эмбеддера.
+    """
+    raw_chunks = split_text_into_chunks(
+        text=doc.content,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+    )
+    return [
+        IndexedChunk(
+            chunk_id=f"{doc.source_path}:{c.index}",
+            text=c.text,
+            chunk_index=c.index,
+            metadata=_chroma_metadata_for_index(doc, c.index),
+        )
+        for c in raw_chunks
+    ]
 
 
 def get_existing_documents_state(
@@ -260,20 +375,56 @@ def run_indexing_pipeline() -> None:
     """
     Выполняет полный цикл: загрузка -> чанкинг -> эмбеддинг -> запись в ChromaDB.
     """
-    logger.info("Data indexing pipeline started")
+    logger.info("Knowledge base indexing started")
     logger.info("Embedding model: %s", settings.embedding_model_name)
 
     knowledge_docs = load_knowledge_documents(settings.knowledge_base_file)
-    logger.info("Knowledge documents loaded: %s", len(knowledge_docs))
+    total_chunks_if_full_rebuild = sum(
+        len(
+            build_indexed_chunks_for_document(
+                doc,
+                chunk_size=settings.chunk_size,
+                chunk_overlap=settings.chunk_overlap,
+            )
+        )
+        for doc in knowledge_docs
+    )
+    logger.info(
+        "Knowledge documents loaded: %s; total chunks if full reindex: %s",
+        len(knowledge_docs),
+        total_chunks_if_full_rebuild,
+    )
 
     import chromadb
 
-    client = chromadb.PersistentClient(path=settings.chroma_persist_directory)
-    collection = client.get_or_create_collection(
-        name=settings.chroma_collection_name,
-        metadata={"hnsw:space": "cosine"},
+    try:
+        client = chromadb.PersistentClient(path=settings.chroma_persist_directory)
+        collection = client.get_or_create_collection(
+            name=settings.chroma_collection_name,
+            metadata={"hnsw:space": "cosine"},
+        )
+    except Exception as e:
+        logger.error(
+            "Failed to open ChromaDB at %r collection %r: %s",
+            settings.chroma_persist_directory,
+            settings.chroma_collection_name,
+            e,
+        )
+        raise
+
+    try:
+        existing_ids_by_source, existing_hash_by_source = get_existing_documents_state(collection)
+    except Exception as e:
+        logger.error("Failed to read existing state from ChromaDB: %s", e)
+        raise
+
+    existing_chunk_count = collection.count()
+    logger.info(
+        "ChromaDB ready: persist=%s collection=%s existing_chunks=%s",
+        settings.chroma_persist_directory,
+        settings.chroma_collection_name,
+        existing_chunk_count,
     )
-    existing_ids_by_source, existing_hash_by_source = get_existing_documents_state(collection)
 
     current_sources = {doc.source_path for doc in knowledge_docs}
     stale_sources = set(existing_ids_by_source) - current_sources
@@ -283,7 +434,11 @@ def run_indexing_pipeline() -> None:
         for chunk_id in existing_ids_by_source.get(source_path, [])
     ]
     if stale_ids:
-        collection.delete(ids=stale_ids)
+        try:
+            collection.delete(ids=stale_ids)
+        except Exception as e:
+            logger.error("ChromaDB delete (stale chunks) failed: %s", e)
+            raise
         logger.info("Removed %s stale chunks from deleted documents", len(stale_ids))
 
     docs_to_upsert = select_documents_for_incremental_upsert(
@@ -291,7 +446,12 @@ def run_indexing_pipeline() -> None:
         existing_hash_by_source=existing_hash_by_source,
     )
     if not docs_to_upsert:
-        logger.info("No document changes detected. Incremental indexing skipped.")
+        logger.info(
+            "Incremental indexing skipped: no document text changes "
+            "(%s documents in KB, %s chunks currently in ChromaDB)",
+            len(knowledge_docs),
+            collection.count(),
+        )
         return
 
     changed_ids = [
@@ -300,60 +460,60 @@ def run_indexing_pipeline() -> None:
         for chunk_id in existing_ids_by_source.get(doc.source_path, [])
     ]
     if changed_ids:
-        collection.delete(ids=changed_ids)
+        try:
+            collection.delete(ids=changed_ids)
+        except Exception as e:
+            logger.error("ChromaDB delete (changed documents) failed: %s", e)
+            raise
         logger.info("Removed %s chunks for changed documents", len(changed_ids))
 
-    chunk_rows = []
+    indexed_chunks: list[IndexedChunk] = []
     for doc in docs_to_upsert:
-        doc_chunks = split_text_into_chunks(
-            text=doc.content,
-            chunk_size=settings.chunk_size,
-            chunk_overlap=settings.chunk_overlap,
+        indexed_chunks.extend(
+            build_indexed_chunks_for_document(
+                doc,
+                chunk_size=settings.chunk_size,
+                chunk_overlap=settings.chunk_overlap,
+            )
         )
-        for chunk in doc_chunks:
-            chunk_rows.append((doc, chunk))
-    if not chunk_rows:
+    if not indexed_chunks:
         logger.info("Changed documents have no chunks after splitting. Nothing to upsert.")
         return
 
-    logger.info("Chunks prepared for upsert: %s", len(chunk_rows))
+    logger.info(
+        "Prepared %s chunks from %s documents for upsert to ChromaDB",
+        len(indexed_chunks),
+        len(docs_to_upsert),
+    )
 
     from sentence_transformers import SentenceTransformer
 
-    model = SentenceTransformer(settings.embedding_model_name)
+    try:
+        model = SentenceTransformer(settings.embedding_model_name)
+    except Exception as e:
+        logger.error(
+            "Failed to load embedding model %r (network, disk, or HF Hub): %s",
+            settings.embedding_model_name,
+            e,
+        )
+        raise
+
     logger.info("SentenceTransformer model initialized")
 
-    embeddings = embed_chunks(model=model, chunks=[row[1] for row in chunk_rows])
+    embeddings = embed_chunks(model=model, chunks=indexed_chunks)
     logger.info("Embeddings generated: %s", len(embeddings))
 
-    ids = [f"{doc.source_path}:{chunk.index}" for doc, chunk in chunk_rows]
-    documents = [chunk.text for _, chunk in chunk_rows]
-    metadatas = [
-        {
-            "source_path": doc.source_path,
-            "chunk_index": chunk.index,
-            "start_char": chunk.start_char,
-            "end_char": chunk.end_char,
-            "doc_id": doc.metadata.get("doc_id"),
-            "doc_type": doc.metadata.get("doc_type"),
-            "location": doc.metadata.get("location"),
-            "yaml_path": doc.metadata.get("yaml_path"),
-            "doc_hash": compute_document_hash(doc.content),
-        }
-        for doc, chunk in chunk_rows
-    ]
+    try:
+        add_indexed_chunks(collection, indexed_chunks, embeddings)
+    except Exception as e:
+        logger.error("ChromaDB collection.add failed (%s vectors): %s", len(indexed_chunks), e)
+        raise
 
-    collection.add(
-        ids=ids,
-        embeddings=embeddings,
-        documents=documents,
-        metadatas=metadatas,
-    )
     logger.info(
-        "Incremental indexing finished. Collection '%s': upserted %s docs, %s chunks",
+        "Successfully saved to ChromaDB: collection=%r added_chunks=%s documents_upserted=%s",
         settings.chroma_collection_name,
+        len(indexed_chunks),
         len(docs_to_upsert),
-        len(chunk_rows),
     )
 
 

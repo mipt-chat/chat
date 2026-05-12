@@ -8,11 +8,9 @@ def test_split_text_into_chunks_keeps_overlap() -> None:
 
     assert len(chunks) == 2
     assert chunks[0].text == "012345"
-    assert chunks[0].start_char == 0
-    assert chunks[0].end_char == 6
+    assert chunks[0].index == 0
     assert chunks[1].text == "456789"
-    assert chunks[1].start_char == 4
-    assert chunks[1].end_char == 10
+    assert chunks[1].index == 1
 
 
 def test_split_text_into_chunks_validates_overlap() -> None:

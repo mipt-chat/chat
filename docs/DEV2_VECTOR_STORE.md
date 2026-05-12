@@ -1,125 +1,191 @@
 # Интеграция Retrieval (Dev 2) с векторным хранилищем
 
-Документ описывает, что подготовил **Data Processing (Dev 4)**, и как **Retrieval (Dev 2)** подключается к **ChromaDB** и эмбеддингам.
+Документ для **Dev 2 (Retrieval / RAG)**: что уже сделано **Dev 4 (Data)**, какие контракты и конфиги использовать, и **что нужно реализовать** в коде поиска по Chroma.
 
-## Что уже есть в репозитории
+---
 
-- Код индексации: `app/data/indexing/pipeline.py`
-- Чанкинг: `app/data/indexing/chunking.py`
-- Запуск полной / инкрементальной индексации:
+## Чеклист Dev 2
 
-  ```bash
-  python -m app.data.indexing.pipeline
-  ```
+1. Читать Chroma из **`settings.chroma_persist_directory`** и **`settings.chroma_collection_name`** (см. ниже).
+2. Загружать **`SentenceTransformer(settings.embedding_model_name)`** — имя модели **должно совпадать** с индексацией.
+3. Кодировать пользовательский запрос с префиксом **`query: `** (пробел после двоеточия — как у E5), **`normalize_embeddings=True`**.
+4. Вызывать `collection.query(...)`, забирать **`n_results=settings.retrieval_top_k`**, в `include` как минимум `documents`, `metadatas`, `distances` (и при необходимости `ids`).
+5. Собрать ответ слоя retrieval как список **`RetrievedChunk`** из `app/models/knowledge.py` (маппинг полей и **`score`** в диапазоне 0..1 — см. раздел про score).
+6. Не менять схему metadata в Chroma без согласования (контракт с Dev 4 и тестами).
 
-- База знаний: `knowledge_base/root.yaml` и связанные YAML + `.txt` (см. README).
+---
 
-Индекс **не коммитится** в git: каталог `chroma_storage/` в `.gitignore`. Каждый разработчик или CI после `git pull` при необходимости **один раз** (или после изменений KB) запускает команду выше.
+## Зона ответственности
 
-## Переменные окружения (те же, что у индексации)
+| Команда | Зона |
+|---------|------|
+| **Dev 4** | Загрузка KB (YAML + `.txt`), чанкинг, эмбеддинги с `passage:`, инкрементальная запись в Chroma (`python -m app.data.indexing.pipeline`). |
+| **Dev 2** | Подключение к той же коллекции, эмбед запроса с `query:`, similarity search, маппинг результатов в **`RetrievedChunk`**, передача в LLM / API. |
 
-Все значения читаются из `app/core/config.py` (`Settings`) и из `.env` (пример — `.env.example`).
+Индекс **не коммитится**: каталог `chroma_storage/` в `.gitignore`. Локально после `git pull` при отсутствии индекса — один прогон пайплайна индексации (или артефакт CI).
 
-| Переменная | Назначение |
-|------------|------------|
-| `CHROMA_PERSIST_DIRECTORY` | Каталог персистентного хранилища Chroma (по умолчанию `chroma_storage`) |
-| `CHROMA_COLLECTION_NAME` | Имя коллекции (по умолчанию `support_knowledge`) |
-| `EMBEDDING_MODEL_NAME` | Модель эмбеддингов, **та же**, что при индексации (по умолчанию `intfloat/multilingual-e5-base`) |
-| `RETRIEVAL_TOP_K` | Сколько чанков забирать в контекст (по умолчанию `5`) |
-| `CHUNK_SIZE` / `CHUNK_OVERLAP` | Используются только при **индексации**; на формат векторов в Chroma не влияют |
+---
 
-## Проверка: чанки не шире окна эмбеддинг-модели
+## Карта кода (куда смотреть)
 
-`CHUNK_SIZE` задан в **символах**, лимит E5 — в **токенах** (`max_seq_length`, обычно 512). Чтобы убедиться, что при индексации строки `passage: …` не обрезаются токенизатором:
+| Файл | Назначение |
+|------|------------|
+| `app/core/config.py` | **`Settings`**: пути Chroma, имя модели, `retrieval_top_k`, `knowledge_base_file` и др. |
+| `app/models/knowledge.py` | **`RetrievedChunk`** — выход retrieval для LLM/API; **`IndexedChunk`** — формат чанка при индексации (для согласования полей с Chroma). |
+| `app/data/indexing/pipeline.py` | Индексация: `add_e5_passage_prefix`, `run_indexing_pipeline`, инкремент по `doc_hash`. |
+| `app/data/indexing/chroma_store.py` | **`add_indexed_chunks`** — как в Chroma попадают `ids` / `documents` / `metadatas` из **`IndexedChunk`**. |
+| `app/data/indexing/chunking.py` | Только нарезка текста (внутренний тип `Chunk`); на retrieval не влияет. |
+| `tests/data/test_incremental_chroma.py` | Поведение индекса (пустая коллекция / без изменений / смена файла). |
 
-```bash
-pytest tests/data/test_embedding_chunk_budget.py -v
-```
+Конфиг в коде: **`from app.core.config import settings`** (singleton).
 
-Тесты помечены `slow` (загружается `SentenceTransformer`). Быстрый прогон без них: `pytest tests/ -m "not slow"`.
+---
 
-Подключение к Chroma в коде (пример):
+## Переменные окружения и поля `Settings`
+
+Соответствие имени в `.env` и атрибута `settings` (см. также `.env.example`):
+
+| Переменная `.env` | `settings.<атрибут>` | Назначение для Dev 2 |
+|-------------------|----------------------|----------------------|
+| `CHROMA_PERSIST_DIRECTORY` | `chroma_persist_directory` | Каталог персистентного клиента Chroma |
+| `CHROMA_COLLECTION_NAME` | `chroma_collection_name` | Имя коллекции |
+| `EMBEDDING_MODEL_NAME` | `embedding_model_name` | Модель эмбеддингов (**та же**, что при индексации) |
+| `RETRIEVAL_TOP_K` | `retrieval_top_k` | Сколько чанков запрашивать у `query` |
+| `KNOWLEDGE_BASE_FILE` | `knowledge_base_file` | Только для пайплайна индексации; retrieval **не читает** KB с диска |
+| `CHUNK_SIZE` / `CHUNK_OVERLAP` | `chunk_size` / `chunk_overlap` | Только **индексация**; на формат векторов в Chroma retrieval не влияет |
+
+Подключение к коллекции (чтение):
 
 ```python
 import chromadb
+from app.core.config import settings
 
-client = chromadb.PersistentClient(path="<CHROMA_PERSIST_DIRECTORY>")
-collection = client.get_collection(name="<CHROMA_COLLECTION_NAME>")
+client = chromadb.PersistentClient(path=settings.chroma_persist_directory)
+collection = client.get_collection(name=settings.chroma_collection_name)
 ```
+
+Если коллекции ещё нет, `get_collection` упадёт — это ожидаемо до первой успешной индексации.
+
+---
+
+## Схема записи в Chroma (контракт с индексатором)
+
+Коллекция создаётся с **`metadata={"hnsw:space": "cosine"}`**; эмбеддинги при индексации **нормализованы**.
+
+У каждой записи (один чанк):
+
+| Chroma | Источник смысла |
+|--------|-----------------|
+| **id** | `{source_path}:{chunk_index}` — совпадает с **`IndexedChunk.chunk_id`** |
+| **document** | Текст чанка **без** префикса `passage:` — совпадает с **`IndexedChunk.text`** |
+| **embedding** | Вектор из модели по строке `passage: {text}` |
+| **metadata** | Словарь из **`IndexedChunk.metadata`** (типы значений: `str`, `int`, `float`, `bool` только; **`null` нет**) |
+
+Обязательные / частые ключи **metadata**:
+
+- `source_path` — абсолютный путь к исходному `.txt` (как в репозитории после резолва).
+- `chunk_index` — номер чанка внутри документа (дублирует суффикс в `id`, удобно для отладки).
+- `doc_hash` — SHA-256 текста **целого** документа (инкремент у Dev 4).
+- `doc_id`, `doc_type`, `location`, `yaml_path` — **только если** были в манифесте YAML; для точки входа одним `.txt` этих ключей может не быть.
+
+---
 
 ## Критично: префиксы E5
 
-При индексации каждый чанк эмбеддится как строка с префиксом **`passage:`** (см. `add_e5_passage_prefix` в `pipeline.py`). В поле `documents` в Chroma сохраняется **текст чанка без префикса**; префикс участвует только в расчёте вектора.
+Индексация считает вектор по строке **`passage: `** + текст (один пробел после двоеточия — функция `add_e5_passage_prefix` в `pipeline.py`).
 
-Для **запроса пользователя** при поиске нужно использовать ту же модель и префикс **`query:`**:
+Поиск **обязан** использовать ту же модель и префикс **`query: `** + текст пользователя:
 
 ```python
 from sentence_transformers import SentenceTransformer
+from app.core.config import settings
 
 model = SentenceTransformer(settings.embedding_model_name)
 q = model.encode(
     [f"query: {user_text}"],
     normalize_embeddings=True,
+    show_progress_bar=False,
     convert_to_numpy=True,
 )[0].tolist()
 ```
 
-Дальше — `collection.query(query_embeddings=[q], n_results=settings.retrieval_top_k, include=["documents", "metadatas", "distances"])` (или эквивалентный API).
+Дальше (пример вызова Chroma):
 
-Без согласованности **`passage:`** (индекс) / **`query:`** (поиск) качество retrieval заметно падает.
+```python
+raw = collection.query(
+    query_embeddings=[q],
+    n_results=settings.retrieval_top_k,
+    include=["ids", "documents", "metadatas", "distances"],
+)
+```
 
-## Содержимое коллекции
+Без пары **`passage:`** (индекс) / **`query:`** (поиск) качество retrieval резко падает.
 
-У каждой записи (чанка):
+---
 
-- **id**: строка вида `{source_path}:{chunk_index}`
-- **embedding**: вектор чанка (нормализованный, косинусная метрика в метаданных коллекции: `hnsw:space` = `cosine`)
-- **document**: текст чанка (без префикса `passage:`)
-- **metadata** (словарь), ключевые поля:
-  - `source_path` — путь к исходному `.txt`
-  - `chunk_index`, `start_char`, `end_char`
-  - `doc_id` — идентификатор из YAML (`docs`), если документ из манифеста
-  - `doc_type`, `location`, `yaml_path` — при наличии в манифесте
-  - `doc_hash` — SHA-256 содержимого **целого документа** (для инкрементальной индексации)
+## Маппинг результата Chroma в `RetrievedChunk`
 
-## Модель ответа API (контракт между слоями)
+Модель: **`app/models/knowledge.py` → `RetrievedChunk`**: `chunk_id`, `text`, `metadata`, **`score`** ∈ [0, 1].
 
-Структура для передачи в LLM / API описана в `app/models/knowledge.py` — класс **`RetrievedChunk`**: `chunk_id`, `text`, `metadata`, `score`.
+Рекомендуемый маппинг полей:
 
-При маппинге из Chroma:
+- `chunk_id` ← элемент из `raw["ids"][i]` (первая выдача — список списков по запросам).
+- `text` ← соответствующий `documents`.
+- `metadata` ← словарь `metadatas` **как есть** (для ссылок на источник обычно достаточно `source_path`).
 
-- `chunk_id` ← id записи в Chroma;
-- `text` ← `document`;
-- `metadata` ← метаданные чанка (обязательно сохранять `source_path` для ссылок на источник);
-- `score` — привести расстояние Chroma к ожидаемому диапазону `RetrievedChunk` (в модели указан диапазон 0..1; уточните с командой, если используете «сырое» расстояние вместо similarity).
+**`score`:** в `RetrievedChunk` задокументирован диапазон 0..1. Chroma отдаёт **`distances`** в метрике коллекции (косинусное расстояние / связанная величина — зависит от версии клиента). Нужно **в одном месте** в коде retrieval зафиксировать формулу перевода `distance → score` (например, монотонное преобразование в 0..1) и не смешивать разные трактовки в разных endpoint’ах. До фиксации формулы — согласовать с командой и кратко продублировать формулу здесь в PR.
 
-## Инкрементальная индексация (для понимания поведения)
+---
+
+## Инкрементальная индексация (что важно для Dev 2)
 
 Повторный запуск `python -m app.data.indexing.pipeline`:
 
-- удаляет векторы документов, которых больше нет в манифесте;
-- пересчитывает только документы с изменённым текстом (по `doc_hash`);
-- при отсутствии изменений может завершиться без записи в Chroma.
+- удаляет чанки по `source_path`, которых больше нет в текущем наборе документов;
+- пересчитывает эмбеддинги только для документов с **изменённым** `doc_hash`;
+- при отсутствии изменений в логах — сообщение о пропуске записи.
 
-Dev 2 **только читает** коллекцию; пересборку индекса инициирует Dev 4 / CI / админ.
+Dev 2 **только читает** коллекцию; актуальность индекса обеспечивает Dev 4 / CI.
 
-## Проверка, что индекс на месте
+Ограничение: если меняются только **`CHUNK_SIZE` / `CHUNK_OVERLAP`**, текст файлов и `doc_hash` не меняются — инкремент может **не** пересобрать чанки. Тогда нужна полная переиндексация или отдельный сценарий (например, флаг force reindex — на будущее).
+
+---
+
+## Проверки (Dev 2 и общие)
+
+Убедиться, что индекс не пустой (подставьте свои значения из `.env` при отличии от умолчанию):
 
 ```bash
 python -c "
 import chromadb
-c = chromadb.PersistentClient(path='chroma_storage')
-col = c.get_collection('support_knowledge')
+from app.core.config import settings
+c = chromadb.PersistentClient(path=settings.chroma_persist_directory)
+col = c.get_collection(settings.chroma_collection_name)
 print('count:', col.count())
 "
 ```
 
-Подставьте свои `CHROMA_PERSIST_DIRECTORY` и `CHROMA_COLLECTION_NAME`, если отличаются от значений по умолчанию.
+Чанки не шире окна модели по токенам (`CHUNK_SIZE` в символах, лимит E5 в токенах):
 
-## Ограничение (на будущее)
+```bash
+pytest tests/data/test_embedding_chunk_budget.py -v
+```
 
-Если меняются только **`CHUNK_SIZE` / `CHUNK_OVERLAP`**, хэш файла не меняется — инкремент может **не** пересобрать чанки. Тогда нужна полная переиндексация (очистка коллекции или отдельный сценарий). С Dev 4 можно согласовать отдельный флаг «force reindex», если понадобится.
+Эти тесты помечены **`slow`**. Быстрый CI-набор без них:
+
+```bash
+ruff check app/ tests/
+pytest tests/ -m "not slow" -v
+```
+
+Полный прогон всех тестов:
+
+```bash
+pytest tests/ -v
+```
 
 ---
 
-Вопросы по формату метаданных или изменению контракта — через команду и правки в `app/models/`, как в CONTRIBUTING.
+## Смена контракта
+
+Любые изменения полей metadata, формата `id` или префиксов E5 — **согласовать с Dev 4**, обновить тесты в `tests/data/` и этот документ; модели — в `app/models/`, как в CONTRIBUTING.
