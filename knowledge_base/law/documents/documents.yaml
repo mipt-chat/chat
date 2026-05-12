@@ -1,0 +1,49 @@
+docs:
+  documents.usloviya_programmy:
+    location: usloviya.programmy.test.draiv.cfa
+    type: markdown
+    source: usloviya.programmy.test.draiv.cfa.txt
+  documents.soglashenie_ob_obrabotke:
+    location: soglashenie.ob.obrabotke.personalnyh.dannyh
+    type: markdown
+    source: soglashenie.ob.obrabotke.personalnyh.dannyh.txt
+  documents.soglasie_na_obrabotku:
+    location: soglasie.na.obrabotku.pers
+    type: markdown
+    source: soglasie.na.obrabotku.pers.txt
+  documents.terms:
+    location: terms
+    type: markdown
+    source: terms.txt
+  documents.polzovatelskoe_soglashenie:
+    location: polzovatelskoe.soglashenie
+    type: markdown
+    source: polzovatelskoe.soglashenie.txt
+  documents.reglament_o_kvalinvestorah:
+    location: reglament.o.kvalinvestorah
+    type: markdown
+    source: reglament.o.kvalinvestorah.txt
+  documents.reglament_po_rabote:
+    location: reglament.po.rabote.s.obrashcheniyami
+    type: markdown
+    source: reglament.po.rabote.s.obrashcheniyami.txt
+  documents.obshchie_usloviya_GCP:
+    location: obshchie.usloviya.reshniya.o.vypuske.GCP
+    type: markdown
+    source: obshchie.usloviya.reshniya.o.vypuske.GCP.txt
+  documents.obshchie_usloviya:
+    location: obshchie.usloviya.reshniya.o.vypuske
+    type: markdown
+    source: obshchie.usloviya.reshniya.o.vypuske.txt
+  documents.law_fz259:
+    location: law_fz259
+    type: markdown
+    source: law_fz259.txt
+  documents.law115:
+    location: law115
+    type: markdown
+    source: law115.txt
+  documents.forma_predstavlenija:
+    location: forma.predstavlenija.informacii.ob.emitente
+    type: markdown
+    source: forma.predstavlenija.informacii.ob.emitente.txt 

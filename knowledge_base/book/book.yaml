@@ -1,0 +1,58 @@
+docs:
+  books.about_cfa:
+    location: about_cfa
+    type: markdown
+    source: about_cfa.txt
+  books.signature:
+    location: signature
+    type: markdown
+    source: signature.txt
+  books.taxation:
+    location: taxation
+    type: markdown
+    source: taxation.txt
+  books.registration:
+    location: registration
+    type: markdown
+    source: registration.txt
+  books.risk_hedging:
+    location: risk_hedging
+    type: markdown
+    source: risk_hedging.txt
+  books.sellBuy:
+    location: sellBuy
+    type: markdown
+    source: sellBuy.txt
+  books.obligations:
+    location: obligations
+    type: markdown
+    source: obligations.txt
+  books.podFT:
+    location: podFT
+    type: markdown
+    source: podFT.txt
+  books.qualification:
+    location: qualification
+    type: markdown
+    source: qualification.txt
+  books.authority:
+    location: authority
+    type: markdown
+    source: authority.txt
+  books.calculations:
+    location: calculations
+    type: markdown
+    source: calculations.txt
+  books.emission:
+    location: emission
+    type: markdown
+    source: emission.txt
+  books.applications:
+    location: applications
+    type: markdown
+    source: applications.txt
+  books.accounting:
+    location: accounting
+    type: markdown
+    source: accounting.txt
+  

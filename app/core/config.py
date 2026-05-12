@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     # ============================================================
     # База знаний
     # ============================================================
-    knowledge_base_file: Path = Path("knowledge_base/knowledge.txt")
+    knowledge_base_file: Path = Path("knowledge_base/root.yaml")
 
     # ============================================================
     # ChromaDB
@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     # ============================================================
     # Embeddings
     # ============================================================
-    embedding_model_name: str = "intfloat/multilingual-e5-large"
+    embedding_model_name: str = "intfloat/multilingual-e5-base"
 
     # ============================================================
     # RAG параметры
