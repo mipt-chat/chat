@@ -101,24 +101,33 @@ def test_load_knowledge_documents_nested_import_only_then_docs(tmp_path) -> None
 
 
 def test_load_knowledge_documents_real_repo_root_yaml_chain() -> None:
-    """Репозиторий: root.yaml → imports → … → law/law.yaml → documents/documents.yaml → txt."""
+    """Репозиторий: root.yaml → imports → … → law/law.yaml → documents/documents.yaml → txt.
+
+    Инвариант: документы из вложенного манифеста при обходе с корня совпадают по doc_id с
+    прямой загрузкой того же yaml (число записей в KB может меняться без правки теста).
+    """
     repo = Path(__file__).resolve().parents[2]
     entry = repo / settings.knowledge_base_file
     if not entry.exists():
         pytest.skip(f"No knowledge base at {entry}")
 
-    docs = load_knowledge_documents(entry)
-
     nested_manifest = (repo / "knowledge_base/law/documents/documents.yaml").resolve()
+    if not nested_manifest.exists():
+        pytest.skip(f"No law documents manifest at {nested_manifest}")
+
+    docs = load_knowledge_documents(entry)
+    direct_from_nested = load_knowledge_documents(nested_manifest)
+
+    law_docs = [d for d in docs if Path(d.metadata["yaml_path"]).resolve() == nested_manifest]
+    assert Counter(d.metadata["doc_id"] for d in law_docs) == Counter(
+        d.metadata["doc_id"] for d in direct_from_nested
+    )
     by_yaml = Counter(
         Path(d.metadata["yaml_path"]).resolve()
         for d in docs
         if d.metadata.get("yaml_path")
     )
-    assert by_yaml[nested_manifest] == 12
-    assert len(docs) == 51
-    law_docs = [d for d in docs if Path(d.metadata["yaml_path"]).resolve() == nested_manifest]
-    assert len(law_docs) == 12
+    assert by_yaml[nested_manifest] == len(direct_from_nested)
     assert all("law/documents" in d.source_path.replace("\\", "/") for d in law_docs)
 
 
