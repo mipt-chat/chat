@@ -1,0 +1,13 @@
+# Сборка контекста — меньше трафика и быстрее build
+.venv/
+venv/
+env/
+.git/
+**/__pycache__/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+chroma_storage/
+logs/
+.env

@@ -499,6 +499,10 @@ def run_indexing_pipeline() -> None:
         raise
 
     logger.info("SentenceTransformer model initialized")
+    logger.info(
+        "Computing embeddings for %s chunks (no progress bar; on CPU this may take several minutes)",
+        len(indexed_chunks),
+    )
 
     embeddings = embed_chunks(model=model, chunks=indexed_chunks)
     logger.info("Embeddings generated: %s", len(embeddings))

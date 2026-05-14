@@ -26,6 +26,55 @@
 
 ---
 
+## Запуск через Docker Compose (Dev 4)
+
+Для Dev 2 не обязательно настраивать venv с тяжёлыми зависимостями (torch, sentence-transformers) вручную — достаточно Docker.
+
+### Предварительно
+
+- Установлен и запущен **Docker Desktop** (или Colima / OrbStack).
+- Склонирован репозиторий, текущая директория — корень проекта.
+
+### Сборка образа (один раз или после изменения зависимостей)
+
+```bash
+docker compose -f compose.dev4.yaml build
+```
+
+### Индексация (создание / обновление `chroma_storage/`)
+
+```bash
+docker compose -f compose.dev4.yaml run --rm indexer
+```
+
+После успешного выполнения каталог `chroma_storage/` на хосте содержит готовый индекс — можно подключаться из кода Dev 2 через `chromadb.PersistentClient(path="chroma_storage")`.
+
+Повторный запуск выполняет инкрементальное обновление (только изменённые документы).
+
+### Тесты слоя данных
+
+```bash
+docker compose -f compose.dev4.yaml run --rm test-data
+```
+
+### Переменные окружения
+
+По умолчанию пайплайн берёт значения из `Settings` (см. раздел ниже). Если нужно переопределить — передайте `.env`:
+
+```bash
+docker compose -f compose.dev4.yaml run --rm --env-file .env indexer
+```
+
+### Тома
+
+| Том | Назначение |
+|-----|------------|
+| `./knowledge_base` (bind, ro) | Исходные документы и YAML-манифесты |
+| `./chroma_storage` (bind, rw) | Персистентный индекс Chroma |
+| `dev4_model_cache` (named) | Кэш моделей HuggingFace / torch (не скачивается повторно) |
+
+---
+
 ## Карта кода (куда смотреть)
 
 | Файл | Назначение |
@@ -182,6 +231,12 @@ pytest tests/ -m "not slow" -v
 
 ```bash
 pytest tests/ -v
+```
+
+**Через Docker (без локального venv):**
+
+```bash
+docker compose -f compose.dev4.yaml run --rm test-data
 ```
 
 ---
