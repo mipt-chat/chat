@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1
+# Dev 4: индексация и pytest tests/data/
+#
+# Ускорение:
+# - torch сначала с https://download.pytorch.org/whl/cpu — без сотен МБ nvidia_* (в контейнере GPU всё равно нет).
+# - кэш pip через BuildKit (повторные сборки быстрее).
+# - tests/ копируются после установки зависимостей — правки тестов не сбрасывают слой pip.
+
+FROM python:3.11-slim-bookworm
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    HF_HOME=/cache/huggingface \
+    TORCH_HOME=/cache/torch \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+COPY pyproject.toml ./
+COPY app ./app
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip setuptools wheel \
+    && pip install torch --index-url https://download.pytorch.org/whl/cpu \
+    && pip install -e ".[dev]" --extra-index-url https://download.pytorch.org/whl/cpu
+
+COPY tests ./tests

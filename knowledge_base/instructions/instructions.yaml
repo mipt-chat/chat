@@ -1,0 +1,85 @@
+docs:
+  instructions.terminology:
+    location: terminology
+    type: markdown
+    source: terminology.txt
+  instructions.wallet:
+    location: wallet
+    type: markdown
+    source: wallet.txt
+  instructions.what_are_keys_for:
+    location: what are keys for
+    type: markdown
+    source: what are keys for.txt
+  instructions.workplace:
+    location: wokrplace
+    type: markdown
+    source: wokrplace.txt
+  instructions.qualification:
+    location: qualification
+    type: markdown
+    source: qualification.txt
+  instructions.registration_fiz:
+    location: registration.fiz
+    type: markdown
+    source: registration.fiz.txt
+  instructions.release:
+    location: release
+    type: markdown
+    source: release.txt
+  instructions.sellBuy:
+    location: sellBuy
+    type: markdown
+    source: sellBuy.txt
+  instructions.often_questions:
+    location: often.questions
+    type: markdown
+    source: often.questions.txt
+  instructions.password:
+    location: password
+    type: markdown
+    source: password.txt
+  instructions.placement:
+    location: placement
+    type: markdown
+    source: placement.txt
+  instructions.jargon:
+    location: jargon
+    type: markdown
+    source: jargon.txt
+  instructions.instrukciya_fizlic:
+    location: instrukciya.fizlic.ispolzovaniyu.funkcij
+    type: markdown
+    source: instrukciya.fizlic.ispolzovaniyu.funkcij.txt
+  instructions.instrukciya_yurilic:
+    location: instrukciya.yurilic.ispolzovaniye.funkcij
+    type: markdown
+    source: instrukciya.yurilic.ispolzovaniye.funkcij.txt
+  instructions.dop_info:
+    location: dop_info
+    type: markdown
+    source: dop_info.txt
+  instructions.cryptographic_keys:
+    location: cryptographic_keys
+    type: markdown
+    source: cryptographic_keys.txt
+  instructions.dataFL:
+    location: dataFL
+    type: markdown
+    source: dataFL.txt
+  instructions.dataYL:
+    location: dataYL
+    type: markdown
+    source: dataYL.txt
+  instructions.access_to_personal_account:
+    location: access to personal account
+    type: markdown
+    source: access to personal account.txt
+  instructions.account:
+    location: account
+    type: markdown
+    source: account.txt
+  instructions.adresnaya_zayavka:
+    location: adresnaya zayavka
+    type: markdown
+    source: adresnaya zayavka.txt 

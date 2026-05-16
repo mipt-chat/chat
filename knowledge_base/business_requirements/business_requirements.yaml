@@ -1,0 +1,17 @@
+docs:
+  business_requirements.vtorichnyi_rynok:
+    location: vtorichnyi.rynok
+    type: markdown
+    source: vtorichnyi.rynok.txt
+  business_requirements.defolt_emitenta:
+    location: defolt.emitenta
+    type: markdown
+    source: defolt.emitenta.txt
+  business_requirements.dosrochnoe_pogashenie:
+    location: dosrochnoe.pogashenie
+    type: markdown
+    source: dosrochnoe.pogashenie.txt
+  business_requirements.main:
+    location: main
+    type: markdown
+    source: main.txt 

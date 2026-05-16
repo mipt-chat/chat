@@ -1,0 +1,47 @@
+# Dev 4 (Data): индексация и тесты слоя данных.
+#
+# Сборка образа (один раз, сервис indexer):
+#   docker compose -f compose.dev4.yaml build
+# Индексация (пишет в ./chroma_storage, читает ./knowledge_base):
+#   docker compose -f compose.dev4.yaml run --rm indexer
+#
+# Тесты tests/data/:
+#   docker compose -f compose.dev4.yaml run --rm test-data
+#
+# Переменные окружения (пути Chroma, модель и т.д.) можно передать через файл:
+#   docker compose -f compose.dev4.yaml run --rm --env-file .env indexer
+#
+# Ускорение повторных сборок: включён BuildKit (по умолчанию в Docker Desktop) и кэш pip в Dockerfile.dev4.
+#
+# Сеть: при DeadlineExceeded к registry-1.docker.io сначала выполните
+#   docker pull python:3.11-slim-bookworm
+# при стабильном интернете, затем снова build.
+#
+# Сборка только у indexer (один тег образа). Иначе два сервиса с одним image+build дают параллельный
+# export и ошибку: image "...:local": already exists.
+
+x-dev4: &dev4
+  image: customer-support-bot-dev4:local
+  working_dir: /app
+  environment:
+    HF_HOME: /cache/huggingface
+    TORCH_HOME: /cache/torch
+  volumes:
+    - ./knowledge_base:/app/knowledge_base:ro
+    - ./chroma_storage:/app/chroma_storage
+    - dev4_model_cache:/cache
+
+services:
+  indexer:
+    <<: *dev4
+    build:
+      context: .
+      dockerfile: Dockerfile.dev4
+    command: python -m app.data.indexing.pipeline
+
+  test-data:
+    <<: *dev4
+    command: pytest tests/data/ -v
+
+volumes:
+  dev4_model_cache:
