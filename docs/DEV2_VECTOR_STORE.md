@@ -164,7 +164,7 @@ q = model.encode(
 raw = collection.query(
     query_embeddings=[q],
     n_results=settings.retrieval_top_k,
-    include=["ids", "documents", "metadatas", "distances"],
+    include=["documents", "metadatas", "distances"],
 )
 ```
 
