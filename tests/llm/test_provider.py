@@ -73,6 +73,8 @@ def _provider(settings_mock):
         verify_ssl=bool(config.get("verify_ssl", True)),
         fallback_answer=settings_mock.fallback_answer,
         max_history_length=settings_mock.max_history_length,
+        request_timeout_seconds=600.0,
+        connect_timeout_seconds=5.0,
     )
 
 
@@ -104,6 +106,18 @@ class TestProviderInit:
         provider = _provider(mock_settings)
         # Не должно выбрасывать исключение
         assert provider._model_name == "model"
+
+    def test_openai_client_uses_explicit_timeout(self, mock_settings):
+        provider = _provider(mock_settings)
+
+        client = provider._make_client("token")
+
+        assert client.timeout.read == 600.0
+        assert client.timeout.write == 600.0
+        assert client.timeout.pool == 600.0
+        assert client.timeout.connect == 5.0
+        assert client._client.timeout.read == 600.0
+        assert client._client.timeout.connect == 5.0
 
 
 # ---------------------------------------------------------------------------
@@ -258,6 +272,8 @@ class TestProviderClientLifecycle:
                 auth=RotatingAuth(),
                 fallback_answer=mock_settings.fallback_answer,
                 max_history_length=mock_settings.max_history_length,
+                request_timeout_seconds=600.0,
+                connect_timeout_seconds=5.0,
             )
             chunks = [_make_chunk("контекст", score=0.9)]
 
@@ -266,4 +282,3 @@ class TestProviderClientLifecycle:
 
         client_1.close.assert_awaited_once()
         client_2.close.assert_not_called()
-

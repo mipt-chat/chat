@@ -116,6 +116,8 @@ class TestGetLlmProvider:
         settings_mock.active_llm_provider = "openai_compatible"
         settings_mock.fallback_answer = "fallback"
         settings_mock.max_history_length = 5
+        settings_mock.llm_request_timeout_seconds = 600.0
+        settings_mock.llm_connect_timeout_seconds = 5.0
         settings_mock.get_active_provider_config.return_value = {
             "api_key": "plain-token",
             "base_url": "https://example.com/v1",
@@ -133,12 +135,16 @@ class TestGetLlmProvider:
         assert kwargs["provider_name"] == "openai_compatible"
         assert kwargs["model_name"] == "model"
         assert isinstance(kwargs["auth"], StaticApiKeyAuth)
+        assert kwargs["request_timeout_seconds"] == 600.0
+        assert kwargs["connect_timeout_seconds"] == 5.0
 
     def test_gigachat_uses_oauth_auth_when_enabled(self, monkeypatch):
         settings_mock = MagicMock()
         settings_mock.active_llm_provider = "giga"
         settings_mock.fallback_answer = "fallback"
         settings_mock.max_history_length = 5
+        settings_mock.llm_request_timeout_seconds = 600.0
+        settings_mock.llm_connect_timeout_seconds = 5.0
         settings_mock.get_active_provider_config.return_value = {
             "api_key": "credentials",
             "base_url": "https://gigachat.devices.sberbank.ru/api/v1",

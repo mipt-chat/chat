@@ -83,6 +83,8 @@ def get_llm_provider() -> BaseLLMProvider:
             verify_ssl=verify_ssl,
             fallback_answer=settings.fallback_answer,
             max_history_length=settings.max_history_length,
+            request_timeout_seconds=settings.llm_request_timeout_seconds,
+            connect_timeout_seconds=settings.llm_connect_timeout_seconds,
         )
 
     return _provider

@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     # LLM Провайдеры
     # ============================================================
     active_llm_provider: Literal["yandex", "giga", "openai_compatible"] = "yandex"
+    llm_request_timeout_seconds: float = Field(default=600.0, ge=1.0, le=3600.0)
+    llm_connect_timeout_seconds: float = Field(default=5.0, ge=1.0, le=60.0)
 
     # YandexGPT
     yandex_api_key: SecretStr | None = None

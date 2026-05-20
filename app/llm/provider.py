@@ -55,6 +55,8 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         verify_ssl: bool = True,
         fallback_answer: str,
         max_history_length: int,
+        request_timeout_seconds: float,
+        connect_timeout_seconds: float,
     ) -> None:
         self._provider_name = provider_name
         self._base_url = base_url
@@ -62,6 +64,10 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         self._auth = auth
         self._fallback_answer = fallback_answer
         self._max_history_length = max_history_length
+        self._timeout = httpx.Timeout(
+            timeout=request_timeout_seconds,
+            connect=connect_timeout_seconds,
+        )
         self._model_name = model_name
         self._client: AsyncOpenAI | None = None
         self._client_api_key: str | None = None
@@ -79,7 +85,11 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         return AsyncOpenAI(
             api_key=api_key,
             base_url=self._base_url,
-            http_client=httpx.AsyncClient(verify=self._verify_ssl),
+            timeout=self._timeout,
+            http_client=httpx.AsyncClient(
+                verify=self._verify_ssl,
+                timeout=self._timeout,
+            ),
         )
 
     async def _get_client(self) -> AsyncOpenAI:
