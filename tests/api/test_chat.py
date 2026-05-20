@@ -112,6 +112,39 @@ def test_chat_generates_session_id_when_missing(monkeypatch) -> None:
     assert fake_session_store.saved[0][0] == session_id
 
 
+def test_chat_strips_message_before_processing(monkeypatch) -> None:
+    fake_session_store = _FakeSessionStore()
+    fake_provider = _FakeProvider()
+    seen_questions: list[str] = []
+
+    def search(question: str) -> list[RetrievedChunk]:
+        seen_questions.append(question)
+        return []
+
+    monkeypatch.setattr(chat_service, "session_store", fake_session_store)
+    monkeypatch.setattr(chat_service, "metrics_collector", _FakeMetricsCollector())
+    monkeypatch.setattr(chat_service, "get_llm_provider", lambda: fake_provider)
+    monkeypatch.setattr(chat_service, "search_context", search)
+
+    response = _client().post("/chat", json={"message": "  Привет  ", "session_id": "web_trim"})
+
+    assert response.status_code == 200
+    assert seen_questions == ["Привет"]
+    assert fake_session_store.saved[0] == ("web_trim", "user", "Привет")
+
+
+def test_chat_rejects_whitespace_only_message() -> None:
+    response = _client().post("/chat", json={"message": "   "})
+
+    assert response.status_code == 422
+
+
+def test_chat_stream_rejects_whitespace_only_message() -> None:
+    response = _client().post("/chat/stream", json={"message": "\n\t "})
+
+    assert response.status_code == 422
+
+
 def test_chat_records_unanswered_metric(monkeypatch) -> None:
     fake_session_store = _FakeSessionStore()
     fake_metrics = _FakeMetricsCollector()
