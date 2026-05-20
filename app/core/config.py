@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     gigachat_api_key: SecretStr | None = None
     gigachat_base_url: str = "https://gigachat.devices.sberbank.ru/api/v1"
     gigachat_model_name: str = "GigaChat"
+    gigachat_auth_url: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
+    gigachat_scope: str = "GIGACHAT_API_PERS"
+    gigachat_use_oauth: bool = True
+    gigachat_verify_ssl: bool = False
 
     # Универсальный OpenAI-совместимый
     openai_compatible_api_key: SecretStr | None = None
@@ -93,6 +97,10 @@ class Settings(BaseSettings):
                 "api_key": self._secret_value(self.gigachat_api_key),
                 "base_url": self.gigachat_base_url,
                 "model_name": self.gigachat_model_name,
+                "auth_url": self.gigachat_auth_url,
+                "scope": self.gigachat_scope,
+                "use_oauth": self.gigachat_use_oauth,
+                "verify_ssl": self.gigachat_verify_ssl,
             },
             "openai_compatible": {
                 "api_key": self._secret_value(self.openai_compatible_api_key),
@@ -115,6 +123,15 @@ class Settings(BaseSettings):
     # ============================================================
     max_history_length: int = Field(default=5, ge=0, le=20)
     session_ttl_days: int = Field(default=30, ge=0)
+
+    # ============================================================
+    # Telegram Bot
+    # ============================================================
+    telegram_bot_token: SecretStr | None = None
+    backend_api_url: str = "http://localhost:8000"
+    bot_streaming_enabled: bool = True
+    bot_draft_throttle_seconds: float = Field(default=1.0, ge=0.2, le=5.0)
+    bot_max_final_message_chars: int = Field(default=4096, ge=1000, le=4096)
 
     # ============================================================
     # Логирование

@@ -1,50 +1,100 @@
-x-app: &app
+x-app-image: &app-image
   build:
     context: .
     dockerfile: Dockerfile
   image: customer-support-bot:local
   working_dir: /app
-  env_file:
-    - .env
-  environment:
-    HF_HOME: /cache/huggingface
-    TORCH_HOME: /cache/torch
-  volumes:
-    - ./app:/app/app:ro
-    - ./knowledge_base:/app/knowledge_base:ro
-    - ./chroma_storage:/app/chroma_storage
-    - ./data:/app/data
-    - ./logs:/app/logs
-    - model_cache:/cache
+  init: true
+
+x-rag-environment: &rag-environment
+  HF_HOME: /cache/huggingface
+  TORCH_HOME: /cache/torch
+  KNOWLEDGE_BASE_FILE: ${KNOWLEDGE_BASE_FILE:-knowledge_base/root.yaml}
+  CHROMA_PERSIST_DIRECTORY: ${CHROMA_PERSIST_DIRECTORY:-chroma_storage}
+  CHROMA_COLLECTION_NAME: ${CHROMA_COLLECTION_NAME:-support_knowledge}
+  EMBEDDING_MODEL_NAME: ${EMBEDDING_MODEL_NAME:-intfloat/multilingual-e5-base}
+  RETRIEVAL_TOP_K: ${RETRIEVAL_TOP_K:-5}
+  CHUNK_SIZE: ${CHUNK_SIZE:-1000}
+  CHUNK_OVERLAP: ${CHUNK_OVERLAP:-200}
+  MAX_HISTORY_LENGTH: ${MAX_HISTORY_LENGTH:-5}
+  SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+  LOG_LEVEL_CONSOLE: ${LOG_LEVEL_CONSOLE:-INFO}
+  LOG_LEVEL_FILE: ${LOG_LEVEL_FILE:-INFO}
+  LOG_DIR: ${LOG_DIR:-logs}
+  LOG_FILE: ${LOG_FILE:-bot.log}
+
+x-rag-volumes: &rag-volumes
+  - ./app:/app/app:ro
+  - ./knowledge_base:/app/knowledge_base:ro
+  - ./chroma_storage:/app/chroma_storage
+  - ./data:/app/data
+  - ./logs:/app/logs
+  - model_cache:/cache
 
 services:
   api:
-    <<: *app
+    <<: *app-image
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    env_file:
+      - .env
+    environment:
+      <<: *rag-environment
+    volumes: *rag-volumes
     ports:
       - "8000:8000"
+    restart: unless-stopped
     healthcheck:
       test:
         - CMD
         - python
         - -c
-        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')"
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 20s
+      start_period: 30s
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    image: customer-support-bot-telegram:local
+    working_dir: /app
+    init: true
+    command: python -m app.bot.main
+    profiles:
+      - bot
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      BACKEND_API_URL: http://api:8000
+      LOG_LEVEL_CONSOLE: ${LOG_LEVEL_CONSOLE:-INFO}
+      LOG_LEVEL_FILE: ${LOG_LEVEL_FILE:-INFO}
+      LOG_DIR: ${LOG_DIR:-logs}
+      LOG_FILE: ${LOG_FILE:-bot.log}
+    volumes:
+      - ./app:/app/app:ro
+      - ./logs:/app/logs
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
 
   indexer:
-    <<: *app
+    <<: *app-image
     command: python -m app.data.indexing.pipeline
     profiles:
       - tools
+    environment:
+      <<: *rag-environment
+    volumes: *rag-volumes
 
   test:
-    <<: *app
+    <<: *app-image
     command: pytest tests/ -m "not slow" -v
     profiles:
       - tools
+    environment:
+      <<: *rag-environment
     volumes:
       - ./app:/app/app:ro
       - ./tests:/app/tests:ro

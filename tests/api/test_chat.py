@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.core.exceptions import LLMProviderError, RetrievalError
+from app.llm.base import LLMStreamChunk
 from app.main import create_app
 from app.models.knowledge import RetrievedChunk
 from app.models.session import DialogMessage
@@ -42,6 +43,16 @@ class _FakeProvider:
     ) -> tuple[str, bool]:
         self.calls.append((question, context_chunks, history))
         return self.answer, self.answered
+
+    async def stream(
+        self,
+        question: str,
+        context_chunks: list[RetrievedChunk],
+        history: list[DialogMessage],
+    ):
+        self.calls.append((question, context_chunks, history))
+        yield LLMStreamChunk(text=self.answer)
+        yield LLMStreamChunk(is_final=True, answered=self.answered)
 
 
 def _client() -> TestClient:
@@ -151,3 +162,51 @@ def test_chat_llm_error_returns_502(monkeypatch) -> None:
     assert response.status_code == 502
     assert response.json() == {"error": "Ошибка LLM", "detail": "timeout"}
 
+
+def test_chat_stream_success(monkeypatch) -> None:
+    fake_session_store = _FakeSessionStore()
+    fake_provider = _FakeProvider(answer="Потоковый ответ", answered=True)
+
+    monkeypatch.setattr(chat_service, "session_store", fake_session_store)
+    monkeypatch.setattr(chat_service, "metrics_collector", _FakeMetricsCollector())
+    monkeypatch.setattr(chat_service, "get_llm_provider", lambda: fake_provider)
+    monkeypatch.setattr(chat_service, "search_context", lambda question: [_chunk()])
+
+    response = _client().post(
+        "/chat/stream",
+        json={"message": "Как зарегистрироваться?", "session_id": "web_stream"},
+    )
+
+    assert response.status_code == 200
+    body = response.text
+    assert "event: session" in body
+    assert 'data: {"text": "Потоковый ответ"}' in body
+    assert "event: sources" in body
+    assert '"answered": true' in body
+    assert fake_session_store.saved == [
+        ("web_stream", "user", "Как зарегистрироваться?"),
+        ("web_stream", "assistant", "Потоковый ответ"),
+    ]
+
+
+def test_chat_stream_unanswered_hides_sources(monkeypatch) -> None:
+    fake_metrics = _FakeMetricsCollector()
+
+    monkeypatch.setattr(chat_service, "session_store", _FakeSessionStore())
+    monkeypatch.setattr(chat_service, "metrics_collector", fake_metrics)
+    monkeypatch.setattr(
+        chat_service,
+        "get_llm_provider",
+        lambda: _FakeProvider(answer="Нет ответа", answered=False),
+    )
+    monkeypatch.setattr(chat_service, "search_context", lambda question: [_chunk()])
+
+    response = _client().post(
+        "/chat/stream",
+        json={"message": "Нерелевантный вопрос", "session_id": "web_stream"},
+    )
+
+    assert response.status_code == 200
+    assert '"answered": false' in response.text
+    assert '"sources": []' in response.text
+    assert fake_metrics.records == [("Нерелевантный вопрос", "web_stream", "no_answer")]

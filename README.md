@@ -90,6 +90,26 @@ curl -X POST http://localhost:8000/chat \
   -d '{"message":"Как зарегистрироваться физическому лицу?"}'
 ```
 
+Встроенный веб-чат доступен на `http://localhost:8000/`.
+
+Streaming API для веба и Telegram:
+
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Как зарегистрироваться физическому лицу?","session_id":"web_demo"}'
+```
+
+Telegram-бот запускается отдельным сервисом после заполнения `TELEGRAM_BOT_TOKEN`:
+
+```bash
+docker compose --profile bot up -d api bot
+```
+
+Для личных чатов бот использует Telegram draft streaming, а финальный ответ
+сохраняет обычным сообщением. Для групп и при ошибке draft-метода остаётся
+обычный финальный ответ.
+
 Быстрые тесты и lint в контейнере:
 
 ```bash
