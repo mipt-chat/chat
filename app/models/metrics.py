@@ -3,8 +3,11 @@
 """
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
+
+UnansweredReason = Literal["low_relevance", "missing_topic", "no_answer", "error"]
 
 
 class UnansweredQuery(BaseModel):
@@ -21,8 +24,11 @@ class UnansweredQuery(BaseModel):
         default_factory=datetime.now,
         description="Время получения вопроса без ответа",
     )
-    reason: str = Field(
+    reason: UnansweredReason = Field(
         default="low_relevance",
-        description="Причина отсутствия ответа (low_relevance, missing_topic, error)",
-        examples=["low_relevance", "missing_topic", "error"],
+        description=(
+            "Причина отсутствия ответа "
+            "(low_relevance, missing_topic, no_answer, error)"
+        ),
+        examples=["low_relevance", "missing_topic", "no_answer", "error"],
     )

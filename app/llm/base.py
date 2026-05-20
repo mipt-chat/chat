@@ -66,3 +66,7 @@ class BaseLLMProvider(ABC):
         чтобы слой API мог сохранить историю и отдать клиенту итоговый статус.
         """
         ...
+
+    async def close(self) -> None:
+        """Release provider resources, if any."""
+        return None

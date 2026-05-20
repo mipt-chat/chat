@@ -5,7 +5,9 @@
 OpenAI-совместимым API.
 """
 
+from asyncio import Lock
 from collections.abc import AsyncIterator
+from inspect import isawaitable
 
 import httpx
 from openai import AsyncOpenAI
@@ -63,6 +65,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         self._model_name = model_name
         self._client: AsyncOpenAI | None = None
         self._client_api_key: str | None = None
+        self._client_lock = Lock()
 
         logger.info(
             "LLM provider initialized: provider=%s model=%s base_url=%s verify_ssl=%s",
@@ -81,10 +84,28 @@ class OpenAICompatibleProvider(BaseLLMProvider):
 
     async def _get_client(self) -> AsyncOpenAI:
         api_key = await self._auth.get_api_key()
-        if self._client is None or self._client_api_key != api_key:
-            self._client = self._make_client(api_key)
-            self._client_api_key = api_key
-        return self._client
+        async with self._client_lock:
+            if self._client is None or self._client_api_key != api_key:
+                old_client = self._client
+                self._client = self._make_client(api_key)
+                self._client_api_key = api_key
+                await self._close_client(old_client)
+            return self._client
+
+    async def close(self) -> None:
+        async with self._client_lock:
+            client = self._client
+            self._client = None
+            self._client_api_key = None
+            await self._close_client(client)
+
+    @staticmethod
+    async def _close_client(client: AsyncOpenAI | None) -> None:
+        if client is None:
+            return
+        result = client.close()
+        if isawaitable(result):
+            await result
 
     def _build_messages(
         self,

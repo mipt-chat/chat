@@ -5,7 +5,7 @@
 from app.models.chat import ChatRequest, ChatResponse, Source
 from app.models.error import ErrorResponse
 from app.models.knowledge import IndexedChunk, KnowledgeDocument, RetrievedChunk
-from app.models.metrics import UnansweredQuery
+from app.models.metrics import UnansweredQuery, UnansweredReason
 from app.models.session import DialogMessage, Session
 
 __all__ = [
@@ -18,5 +18,6 @@ __all__ = [
     "Session",
     "DialogMessage",
     "UnansweredQuery",
+    "UnansweredReason",
     "ErrorResponse",
 ]

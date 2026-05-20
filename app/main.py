@@ -24,8 +24,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     logger.info(f"Active LLM provider: {settings.active_llm_provider}")
     logger.info(f"ChromaDB collection: {settings.chroma_collection_name}")
     logger.info(f"RAG top-k: {settings.retrieval_top_k}")
-    yield
-    logger.info(f"Shutting down {settings.app_name}")
+    try:
+        yield
+    finally:
+        from app.llm import close_llm_provider
+
+        await close_llm_provider()
+        logger.info(f"Shutting down {settings.app_name}")
 
 
 def create_app() -> FastAPI:

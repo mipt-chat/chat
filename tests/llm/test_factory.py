@@ -3,7 +3,7 @@
 Проверяют singleton-поведение и корректность возвращаемого типа.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -160,3 +160,17 @@ class TestGetLlmProvider:
         assert kwargs["provider_name"] == "giga"
         assert kwargs["model_name"] == "GigaChat"
         assert isinstance(kwargs["auth"], GigaChatOAuthAuth)
+
+    @pytest.mark.asyncio
+    async def test_close_llm_provider_closes_and_resets_singleton(self):
+        import app.llm.factory as factory_module
+        from app.llm.factory import close_llm_provider
+
+        provider = MagicMock(spec=BaseLLMProvider)
+        provider.close = AsyncMock()
+        factory_module._provider = provider
+
+        await close_llm_provider()
+
+        provider.close.assert_awaited_once()
+        assert factory_module._provider is None

@@ -86,3 +86,16 @@ def get_llm_provider() -> BaseLLMProvider:
         )
 
     return _provider
+
+
+async def close_llm_provider() -> None:
+    """Close and reset the cached LLM provider, if it was created."""
+
+    global _provider
+
+    if _provider is None:
+        return
+
+    provider = _provider
+    _provider = None
+    await provider.close()

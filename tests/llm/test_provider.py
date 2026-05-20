@@ -214,3 +214,56 @@ class TestProviderGenerate:
         assert answer == "База знаний не содержит информации об этом."
 
 
+class TestProviderClientLifecycle:
+    @pytest.mark.asyncio
+    async def test_close_closes_current_openai_client(self, mock_settings, mock_openai_client):
+        mock_openai_client.close = AsyncMock()
+        mock_openai_client.chat.completions.create = AsyncMock(
+            return_value=_make_completion_response("Ответ")
+        )
+        provider = _provider(mock_settings)
+
+        await provider.generate("вопрос", [_make_chunk("контекст", score=0.9)], [])
+        await provider.close()
+
+        mock_openai_client.close.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_api_key_rotation_closes_previous_openai_client(self, mock_settings):
+        class RotatingAuth:
+            def __init__(self) -> None:
+                self.keys = ["token-1", "token-2"]
+
+            async def get_api_key(self) -> str:
+                return self.keys.pop(0)
+
+        client_1 = MagicMock()
+        client_1.close = AsyncMock()
+        client_1.chat.completions.create = AsyncMock(
+            return_value=_make_completion_response("Первый ответ")
+        )
+        client_2 = MagicMock()
+        client_2.close = AsyncMock()
+        client_2.chat.completions.create = AsyncMock(
+            return_value=_make_completion_response("Второй ответ")
+        )
+
+        with patch("app.llm.provider.AsyncOpenAI", side_effect=[client_1, client_2]):
+            from app.llm.provider import OpenAICompatibleProvider
+
+            provider = OpenAICompatibleProvider(
+                provider_name="openai_compatible",
+                base_url="https://example.com/v1",
+                model_name="model",
+                auth=RotatingAuth(),
+                fallback_answer=mock_settings.fallback_answer,
+                max_history_length=mock_settings.max_history_length,
+            )
+            chunks = [_make_chunk("контекст", score=0.9)]
+
+            await provider.generate("первый вопрос", chunks, [])
+            await provider.generate("второй вопрос", chunks, [])
+
+        client_1.close.assert_awaited_once()
+        client_2.close.assert_not_called()
+
