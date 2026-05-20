@@ -56,6 +56,8 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             if folder_id:
                 model_name = f"gpt://{folder_id}/{model_name}/latest"
                 logger.debug("YandexGPT model URI assembled: %s", model_name)
+        elif settings.active_llm_provider == "giga" and model_name.lower() == "gigachat":
+            model_name = "GigaChat"
 
         self._model_name = model_name
         self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)

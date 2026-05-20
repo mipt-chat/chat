@@ -19,6 +19,9 @@ def create_app():
     Выделено в отдельную функцию для тестирования.
     """
     from fastapi import FastAPI
+
+    from app.api.errors import register_exception_handlers
+    from app.api.routes import chat, health
     # Импорты здесь, чтобы логирование было уже настроено
 
     app = FastAPI(
@@ -27,10 +30,9 @@ def create_app():
         description="MVP-система чат-бота клиентской поддержки с RAG",
     )
 
-    # Регистрация роутов будет добавлена Developer 1
-    # from app.api.routes import chat, health
-    # app.include_router(chat.router)
-    # app.include_router(health.router)
+    register_exception_handlers(app)
+    app.include_router(chat.router)
+    app.include_router(health.router)
 
     return app
 

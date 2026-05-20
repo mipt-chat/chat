@@ -60,7 +60,10 @@ class TestGetLlmProvider:
         first = get_llm_provider()
         factory_module._provider = None  # эмулируем сброс (например, при тестах)
 
-        with patch("app.llm.factory.OpenAICompatibleProvider", return_value=MagicMock(spec=BaseLLMProvider)):
+        with patch(
+            "app.llm.factory.OpenAICompatibleProvider",
+            return_value=MagicMock(spec=BaseLLMProvider),
+        ):
             second = get_llm_provider()
 
         assert first is not second

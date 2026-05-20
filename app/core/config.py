@@ -56,18 +56,26 @@ class Settings(BaseSettings):
     # YandexGPT
     yandex_api_key: SecretStr | None = None
     yandex_folder_id: str | None = None
-    yandex_base_url: str = "https://llm.api.cloud.yandex.net/foundationModels/v1/completions"
+    yandex_base_url: str = "https://llm.api.cloud.yandex.net/v1"
     yandex_model_name: str = "yandexgpt"
 
     # GigaChat
     gigachat_api_key: SecretStr | None = None
     gigachat_base_url: str = "https://gigachat.devices.sberbank.ru/api/v1"
-    gigachat_model_name: str = "gigachat"
+    gigachat_model_name: str = "GigaChat"
 
     # Универсальный OpenAI-совместимый
     openai_compatible_api_key: SecretStr | None = None
     openai_compatible_base_url: str = "http://localhost:11434/v1"
     openai_compatible_model_name: str = "llama3"
+
+    @staticmethod
+    def _secret_value(value: SecretStr | str | None) -> str | None:
+        if value is None:
+            return None
+        if hasattr(value, "get_secret_value"):
+            return value.get_secret_value()
+        return str(value)
 
     def get_active_provider_config(self) -> dict:
         """
@@ -76,30 +84,18 @@ class Settings(BaseSettings):
         """
         provider_configs = {
             "yandex": {
-                "api_key": (
-                    self.yandex_api_key.get_secret_value()
-                    if self.yandex_api_key
-                    else None
-                ),
+                "api_key": self._secret_value(self.yandex_api_key),
                 "base_url": self.yandex_base_url,
                 "folder_id": self.yandex_folder_id,
-                "model_name": "yandexgpt",
+                "model_name": self.yandex_model_name,
             },
             "giga": {
-                "api_key": (
-                    self.gigachat_api_key.get_secret_value()
-                    if self.gigachat_api_key
-                    else None
-                ),
+                "api_key": self._secret_value(self.gigachat_api_key),
                 "base_url": self.gigachat_base_url,
-                "model_name": "gigachat",
+                "model_name": self.gigachat_model_name,
             },
             "openai_compatible": {
-                "api_key": (
-                    self.openai_compatible_api_key.get_secret_value()
-                    if self.openai_compatible_api_key
-                    else None
-                ),
+                "api_key": self._secret_value(self.openai_compatible_api_key),
                 "base_url": self.openai_compatible_base_url,
                 "model_name": self.openai_compatible_model_name,
             },

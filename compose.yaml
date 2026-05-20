@@ -1,0 +1,58 @@
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: customer-support-bot:local
+  working_dir: /app
+  env_file:
+    - .env
+  environment:
+    HF_HOME: /cache/huggingface
+    TORCH_HOME: /cache/torch
+  volumes:
+    - ./app:/app/app:ro
+    - ./knowledge_base:/app/knowledge_base:ro
+    - ./chroma_storage:/app/chroma_storage
+    - ./data:/app/data
+    - ./logs:/app/logs
+    - model_cache:/cache
+
+services:
+  api:
+    <<: *app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  indexer:
+    <<: *app
+    command: python -m app.data.indexing.pipeline
+    profiles:
+      - tools
+
+  test:
+    <<: *app
+    command: pytest tests/ -m "not slow" -v
+    profiles:
+      - tools
+    volumes:
+      - ./app:/app/app:ro
+      - ./tests:/app/tests:ro
+      - ./knowledge_base:/app/knowledge_base:ro
+      - ./chroma_storage:/app/chroma_storage
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - model_cache:/cache
+
+volumes:
+  model_cache:
