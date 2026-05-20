@@ -39,7 +39,7 @@ def _make_completion_response(text: str) -> MagicMock:
 # ---------------------------------------------------------------------------
 
 @pytest.fixture()
-def mock_settings(monkeypatch):
+def mock_settings():
     settings_mock = MagicMock()
     settings_mock.active_llm_provider = "openai_compatible"
     settings_mock.get_active_provider_config.return_value = {
@@ -49,7 +49,6 @@ def mock_settings(monkeypatch):
     }
     settings_mock.fallback_answer = "Извините, я не нашёл ответа."
     settings_mock.max_history_length = 10
-    monkeypatch.setattr("app.llm.provider.settings", settings_mock)
     return settings_mock
 
 
@@ -61,17 +60,34 @@ def mock_openai_client():
         yield client
 
 
+def _provider(settings_mock):
+    from app.llm.auth import StaticApiKeyAuth
+    from app.llm.provider import OpenAICompatibleProvider
+
+    config = settings_mock.get_active_provider_config.return_value
+    return OpenAICompatibleProvider(
+        provider_name=settings_mock.active_llm_provider,
+        base_url=config.get("base_url", "https://example.com/v1"),
+        model_name=config.get("model_name", "test-model"),
+        auth=StaticApiKeyAuth(str(config.get("api_key") or "no-key")),
+        verify_ssl=bool(config.get("verify_ssl", True)),
+        fallback_answer=settings_mock.fallback_answer,
+        max_history_length=settings_mock.max_history_length,
+        request_timeout_seconds=600.0,
+        connect_timeout_seconds=5.0,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Тесты инициализации провайдера
 # ---------------------------------------------------------------------------
 
 class TestProviderInit:
     def test_openai_compatible_init(self, mock_settings, mock_openai_client):
-        from app.llm.provider import OpenAICompatibleProvider
-        provider = OpenAICompatibleProvider()
+        provider = _provider(mock_settings)
         assert provider._model_name == "test-model"
 
-    def test_yandex_model_uri_assembled_with_folder_id(self, mock_settings, mock_openai_client):
+    def test_model_name_is_used_as_passed(self, mock_settings, mock_openai_client):
         mock_settings.active_llm_provider = "yandex"
         mock_settings.get_active_provider_config.return_value = {
             "api_key": "yc-key",
@@ -79,19 +95,7 @@ class TestProviderInit:
             "model_name": "yandexgpt-lite",
             "folder_id": "b1g123folder",
         }
-        from app.llm.provider import OpenAICompatibleProvider
-        provider = OpenAICompatibleProvider()
-        assert provider._model_name == "gpt://b1g123folder/yandexgpt-lite/latest"
-
-    def test_yandex_model_name_unchanged_without_folder_id(self, mock_settings, mock_openai_client):
-        mock_settings.active_llm_provider = "yandex"
-        mock_settings.get_active_provider_config.return_value = {
-            "api_key": "yc-key",
-            "base_url": "https://llm.api.cloud.yandex.net/foundationModels/v1/",
-            "model_name": "yandexgpt-lite",
-        }
-        from app.llm.provider import OpenAICompatibleProvider
-        provider = OpenAICompatibleProvider()
+        provider = _provider(mock_settings)
         assert provider._model_name == "yandexgpt-lite"
 
     def test_missing_api_key_defaults_to_no_key(self, mock_settings, mock_openai_client):
@@ -99,10 +103,21 @@ class TestProviderInit:
             "base_url": "https://example.com/v1",
             "model_name": "model",
         }
-        from app.llm.provider import OpenAICompatibleProvider
-        provider = OpenAICompatibleProvider()
+        provider = _provider(mock_settings)
         # Не должно выбрасывать исключение
         assert provider._model_name == "model"
+
+    def test_openai_client_uses_explicit_timeout(self, mock_settings):
+        provider = _provider(mock_settings)
+
+        client = provider._make_client("token")
+
+        assert client.timeout.read == 600.0
+        assert client.timeout.write == 600.0
+        assert client.timeout.pool == 600.0
+        assert client.timeout.connect == 5.0
+        assert client._client.timeout.read == 600.0
+        assert client._client.timeout.connect == 5.0
 
 
 # ---------------------------------------------------------------------------
@@ -112,8 +127,7 @@ class TestProviderInit:
 class TestProviderGenerate:
     @pytest.mark.asyncio
     async def test_returns_fallback_when_no_relevant_chunks(self, mock_settings, mock_openai_client):
-        from app.llm.provider import OpenAICompatibleProvider
-        provider = OpenAICompatibleProvider()
+        provider = _provider(mock_settings)
         low_score_chunks = [_make_chunk("текст", score=0.1)]
         answer, answered = await provider.generate("вопрос", low_score_chunks, [])
         assert answered is False
@@ -121,8 +135,7 @@ class TestProviderGenerate:
 
     @pytest.mark.asyncio
     async def test_no_api_call_when_no_relevant_chunks(self, mock_settings, mock_openai_client):
-        from app.llm.provider import OpenAICompatibleProvider
-        provider = OpenAICompatibleProvider()
+        provider = _provider(mock_settings)
         low_score_chunks = [_make_chunk("текст", score=0.0)]
         await provider.generate("вопрос", low_score_chunks, [])
         mock_openai_client.chat.completions.create.assert_not_called()
@@ -132,8 +145,7 @@ class TestProviderGenerate:
         mock_openai_client.chat.completions.create = AsyncMock(
             return_value=_make_completion_response("Ответ от LLM")
         )
-        from app.llm.provider import OpenAICompatibleProvider
-        provider = OpenAICompatibleProvider()
+        provider = _provider(mock_settings)
         chunks = [_make_chunk("релевантный контекст", score=0.8)]
         answer, answered = await provider.generate("вопрос", chunks, [])
         assert answered is True
@@ -145,8 +157,7 @@ class TestProviderGenerate:
         mock_openai_client.chat.completions.create = AsyncMock(
             return_value=_make_completion_response("ok")
         )
-        from app.llm.provider import OpenAICompatibleProvider
-        provider = OpenAICompatibleProvider()
+        provider = _provider(mock_settings)
         history = [_make_message("user", f"сообщение {i}") for i in range(5)]
         chunks = [_make_chunk("контекст", score=0.9)]
         await provider.generate("вопрос", chunks, history)
@@ -161,8 +172,7 @@ class TestProviderGenerate:
         mock_openai_client.chat.completions.create = AsyncMock(
             return_value=_make_completion_response("ответ")
         )
-        from app.llm.provider import OpenAICompatibleProvider
-        provider = OpenAICompatibleProvider()
+        provider = _provider(mock_settings)
 
         answer, answered = await provider.generate("вопрос", [], [])
         # Нет релевантных чанков → fallback
@@ -173,8 +183,7 @@ class TestProviderGenerate:
         mock_openai_client.chat.completions.create = AsyncMock(
             return_value=_make_completion_response("ок")
         )
-        from app.llm.provider import OpenAICompatibleProvider
-        provider = OpenAICompatibleProvider()
+        provider = _provider(mock_settings)
         history = [_make_message("assistant", "предыдущий ответ")]
         chunks = [_make_chunk("контекст", score=0.9)]
         await provider.generate("новый вопрос", chunks, history)
@@ -190,49 +199,86 @@ class TestProviderGenerate:
         mock_openai_client.chat.completions.create = AsyncMock(
             side_effect=Exception("connection timeout")
         )
-        from app.llm.provider import OpenAICompatibleProvider
-        provider = OpenAICompatibleProvider()
+        provider = _provider(mock_settings)
         chunks = [_make_chunk("контекст", score=0.9)]
         with pytest.raises(LLMProviderError):
             await provider.generate("вопрос", chunks, [])
 
     @pytest.mark.asyncio
     async def test_none_content_falls_back_to_fallback_answer(self, mock_settings, mock_openai_client):
-        """Если LLM вернул None в content — используем fallback, но answered=True."""
+        """Если LLM вернул None в content — используем fallback и считаем ответ ненайденным."""
         mock_openai_client.chat.completions.create = AsyncMock(
             return_value=_make_completion_response(None)
         )
-        from app.llm.provider import OpenAICompatibleProvider
-        provider = OpenAICompatibleProvider()
+        provider = _provider(mock_settings)
         chunks = [_make_chunk("контекст", score=0.9)]
         answer, answered = await provider.generate("вопрос", chunks, [])
-        assert answered is True
+        assert answered is False
         assert answer == mock_settings.fallback_answer
 
+    @pytest.mark.asyncio
+    async def test_no_answer_phrase_marks_unanswered(self, mock_settings, mock_openai_client):
+        mock_openai_client.chat.completions.create = AsyncMock(
+            return_value=_make_completion_response("База знаний не содержит информации об этом.")
+        )
+        provider = _provider(mock_settings)
+        chunks = [_make_chunk("контекст", score=0.9)]
+        answer, answered = await provider.generate("вопрос", chunks, [])
+        assert answered is False
+        assert answer == "База знаний не содержит информации об этом."
 
-class TestProviderSecretStr:
-    def test_secret_str_api_key_is_unwrapped(self, mock_settings, mock_openai_client):
-        """SecretStr из pydantic-settings должен быть распакован через get_secret_value()."""
-        secret = MagicMock()
-        secret.get_secret_value.return_value = "real-secret-token"
-        mock_settings.get_active_provider_config.return_value = {
-            "api_key": secret,
-            "base_url": "https://example.com/v1",
-            "model_name": "model",
-        }
-        from app.llm.provider import OpenAICompatibleProvider
-        OpenAICompatibleProvider()
-        # get_secret_value() должен быть вызван ровно один раз при инициализации
-        secret.get_secret_value.assert_called_once()
 
-    def test_plain_str_api_key_works_without_unwrap(self, mock_settings, mock_openai_client):
-        """Обычная строка (не SecretStr) должна работать без вызова get_secret_value."""
-        mock_settings.get_active_provider_config.return_value = {
-            "api_key": "plain-token",
-            "base_url": "https://example.com/v1",
-            "model_name": "model",
-        }
-        from app.llm.provider import OpenAICompatibleProvider
-        # Не должно выбрасывать AttributeError
-        provider = OpenAICompatibleProvider()
-        assert provider._model_name == "model"
+class TestProviderClientLifecycle:
+    @pytest.mark.asyncio
+    async def test_close_closes_current_openai_client(self, mock_settings, mock_openai_client):
+        mock_openai_client.close = AsyncMock()
+        mock_openai_client.chat.completions.create = AsyncMock(
+            return_value=_make_completion_response("Ответ")
+        )
+        provider = _provider(mock_settings)
+
+        await provider.generate("вопрос", [_make_chunk("контекст", score=0.9)], [])
+        await provider.close()
+
+        mock_openai_client.close.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_api_key_rotation_closes_previous_openai_client(self, mock_settings):
+        class RotatingAuth:
+            def __init__(self) -> None:
+                self.keys = ["token-1", "token-2"]
+
+            async def get_api_key(self) -> str:
+                return self.keys.pop(0)
+
+        client_1 = MagicMock()
+        client_1.close = AsyncMock()
+        client_1.chat.completions.create = AsyncMock(
+            return_value=_make_completion_response("Первый ответ")
+        )
+        client_2 = MagicMock()
+        client_2.close = AsyncMock()
+        client_2.chat.completions.create = AsyncMock(
+            return_value=_make_completion_response("Второй ответ")
+        )
+
+        with patch("app.llm.provider.AsyncOpenAI", side_effect=[client_1, client_2]):
+            from app.llm.provider import OpenAICompatibleProvider
+
+            provider = OpenAICompatibleProvider(
+                provider_name="openai_compatible",
+                base_url="https://example.com/v1",
+                model_name="model",
+                auth=RotatingAuth(),
+                fallback_answer=mock_settings.fallback_answer,
+                max_history_length=mock_settings.max_history_length,
+                request_timeout_seconds=600.0,
+                connect_timeout_seconds=5.0,
+            )
+            chunks = [_make_chunk("контекст", score=0.9)]
+
+            await provider.generate("первый вопрос", chunks, [])
+            await provider.generate("второй вопрос", chunks, [])
+
+        client_1.close.assert_awaited_once()
+        client_2.close.assert_not_called()

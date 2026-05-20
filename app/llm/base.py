@@ -4,9 +4,20 @@
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
 
 from app.models.knowledge import RetrievedChunk
 from app.models.session import DialogMessage
+
+
+@dataclass(frozen=True)
+class LLMStreamChunk:
+    """One streamed LLM delta or final stream status."""
+
+    text: str = ""
+    is_final: bool = False
+    answered: bool | None = None
 
 
 class BaseLLMProvider(ABC):
@@ -40,3 +51,22 @@ class BaseLLMProvider(ABC):
             LLMProviderError: при ошибке обращения к провайдеру.
         """
         ...
+
+    @abstractmethod
+    async def stream(
+        self,
+        question: str,
+        context_chunks: list[RetrievedChunk],
+        history: list[DialogMessage],
+    ) -> AsyncIterator[LLMStreamChunk]:
+        """
+        Стримит ответ LLM по частям.
+
+        Последний элемент потока должен иметь is_final=True и answered,
+        чтобы слой API мог сохранить историю и отдать клиенту итоговый статус.
+        """
+        ...
+
+    async def close(self) -> None:
+        """Release provider resources, if any."""
+        return None

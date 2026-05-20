@@ -296,7 +296,7 @@ def _chroma_metadata_for_index(
     for key in ("doc_id", "doc_type", "location", "yaml_path"):
         val = doc.metadata.get(key)
         if val is not None:
-            meta[key] = val if isinstance(val, (str, int, float, bool)) else str(val)
+            meta[key] = val if isinstance(val, str | int | float | bool) else str(val)
     return meta
 
 

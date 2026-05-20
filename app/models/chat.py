@@ -3,7 +3,7 @@
 """
 
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Source(BaseModel):
@@ -43,6 +43,14 @@ class ChatRequest(BaseModel):
         default=None,
         description="Скриншот в формате base64 (бонусная фича, необязательно)",
     )
+
+    @field_validator("message")
+    @classmethod
+    def strip_and_validate_message(cls, value: str) -> str:
+        message = value.strip()
+        if not message:
+            raise ValueError("Message must not be empty or whitespace-only")
+        return message
 
 
 class ChatResponse(BaseModel):

@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from app.core.logging_config import get_logger
-from app.models.metrics import UnansweredQuery
+from app.models.metrics import UnansweredQuery, UnansweredReason
 
 logger = get_logger(__name__)
 
@@ -36,7 +36,7 @@ class MetricsCollector:
         self,
         question: str,
         session_id: str | None = None,
-        reason: str = "low_relevance",
+        reason: UnansweredReason = "low_relevance",
     ) -> None:
         """
         Сохраняет вопрос, на который не нашлось ответа.
@@ -47,6 +47,7 @@ class MetricsCollector:
             reason: Причина отсутствия ответа:
                     - "low_relevance" — низкая релевантность чанков
                     - "missing_topic" — тема отсутствует в базе знаний
+                    - "no_answer" — LLM не нашла ответ в переданном контексте
                     - "error" — ошибка при обработке запроса
         """
         record = UnansweredQuery(

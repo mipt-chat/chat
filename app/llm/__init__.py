@@ -4,9 +4,10 @@ LLM Integration Layer.
 """
 
 from app.llm.base import BaseLLMProvider
-from app.llm.factory import get_llm_provider
+from app.llm.factory import close_llm_provider, get_llm_provider
 
 __all__ = [
     "BaseLLMProvider",
+    "close_llm_provider",
     "get_llm_provider",
 ]

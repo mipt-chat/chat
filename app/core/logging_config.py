@@ -60,6 +60,7 @@ def setup_logging() -> None:
 
     # Делаем сторонние библиотеки менее шумными
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("openai").setLevel(logging.WARNING)
     # Иначе при завершении pytest (stdout уже закрыт) HF/httpx могут дать DEBUG из
     # httpcore → "I/O operation on closed file"
     logging.getLogger("httpcore").setLevel(logging.WARNING)

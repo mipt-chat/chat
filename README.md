@@ -65,6 +65,58 @@ MVP-проект чат-бота клиентской поддержки с ис
    | `EMBEDDING_MODEL_NAME` | Модель эмбеддингов для индексации (по умолчанию `intfloat/multilingual-e5-base`) |
    | `CHROMA_*` | Каталог и имя коллекции ChromaDB |
 
+### Запуск через Docker Compose
+
+После заполнения `.env` можно запускать без локального Python-окружения:
+
+```bash
+docker compose build
+docker compose --profile tools run --rm indexer
+docker compose up -d api
+```
+
+Проверки:
+
+```bash
+curl http://localhost:8000/health/live
+curl http://localhost:8000/health/ready
+```
+
+Пример запроса:
+
+```bash
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Как зарегистрироваться физическому лицу?"}'
+```
+
+Встроенный веб-чат доступен на `http://localhost:8000/`.
+
+Streaming API для веба и Telegram:
+
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Как зарегистрироваться физическому лицу?","session_id":"web_demo"}'
+```
+
+Telegram-бот запускается отдельным сервисом после заполнения `TELEGRAM_BOT_TOKEN`:
+
+```bash
+docker compose --profile bot up -d api bot
+```
+
+Для личных чатов бот использует Telegram draft streaming, а финальный ответ
+сохраняет обычным сообщением. Для групп и при ошибке draft-метода остаётся
+обычный финальный ответ.
+
+Быстрые тесты и lint в контейнере:
+
+```bash
+docker compose --profile tools run --rm test pytest tests/ -m "not slow" -q
+docker compose --profile tools run --rm test ruff check app/ tests/
+```
+
 5. База знаний уже лежит в репозитории в каталоге `knowledge_base/`. Корневой манифест:
 
    - `knowledge_base/root.yaml` — список `imports` на разделы (`book/`, `business_requirements/`, `instructions/`, `law/`).
