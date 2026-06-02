@@ -197,9 +197,13 @@ async def _reply_with_stream(
                 raise BackendAPIError(
                     str(event.data.get("error") or "stream error")
                 )
-    except BackendAPIError:
+    except BackendAPIError as exc:
+        # Финализируем черновик ошибкой и НЕ пробрасываем исключение дальше —
+        # иначе внешний обработчик в _handle_user_question отправит ERROR_REPLY
+        # ещё раз и пользователь увидит дубликат.
+        logger.warning("Backend API stream error for user %s: %s", user_id, exc)
         await renderer.finalize(ERROR_REPLY)
-        raise
+        return
 
     if backend_session_id:
         sessions.update(user_id, backend_session_id)

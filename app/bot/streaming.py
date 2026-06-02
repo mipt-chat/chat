@@ -92,13 +92,33 @@ class StreamingMessageRenderer:
             self._sent_message_ids.append(new_msg.message_id)
 
     async def _flush_current_and_split(self, accumulated: str) -> None:
-        head, _, tail = accumulated.rpartition("\n")
-        if not head:
-            head = accumulated[: self._limit]
-            tail = accumulated[self._limit :]
+        """
+        Закрывает текущее сообщение готовой частью и открывает новое для хвоста.
 
-        await self._safe_edit(head)
+        Используем split_for_telegram — он гарантирует, что **каждая** часть
+        не длиннее self._limit (в отличие от наивного rpartition по \\n, который
+        может вернуть head или tail, превышающие лимит, на длинных строках
+        без переносов).
+        """
+        parts = split_for_telegram(accumulated, limit=self._limit)
+        if not parts:
+            return
 
+        *closed_parts, tail = parts
+
+        # Первая часть закрывает текущее сообщение через edit_text,
+        # остальные закрытые части (если split дал > 2 кусков) отправляем как
+        # завершённые сообщения.
+        first_iteration = True
+        for closed in closed_parts:
+            if first_iteration:
+                await self._safe_edit(closed)
+                first_iteration = False
+            else:
+                sent = await self._send_new(closed)
+                self._sent_message_ids.append(sent.message_id)
+
+        # Tail становится новым «живым» черновиком, в который пойдут следующие токены
         new_draft = await self._send_new(tail or "…")
         self._current = new_draft
         self._sent_message_ids.append(new_draft.message_id)
@@ -116,9 +136,18 @@ class StreamingMessageRenderer:
         try:
             await self._current.edit_text(text)
             self._last_rendered = text
+            return
         except TelegramRetryAfter as exc:
             logger.warning("Telegram rate limit on edit, sleep=%.2fs", exc.retry_after)
             await asyncio.sleep(exc.retry_after)
+            # Делаем одну повторную попытку — иначе финальный ответ так и
+            # останется недописанным «черновиком». Бесконечно не ретраим.
+            try:
+                await self._current.edit_text(text)
+                self._last_rendered = text
+            except (TelegramRetryAfter, TelegramBadRequest) as retry_exc:
+                logger.warning("Edit retry failed after rate-limit: %s", retry_exc)
+            return
         except TelegramBadRequest as exc:
             if "message is not modified" in str(exc).lower():
                 return
